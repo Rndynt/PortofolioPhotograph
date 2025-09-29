@@ -1,0 +1,293 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Photographers Portfolio</title>
+  <style>
+    /* Reset */
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+      font-family: 'Georgia', serif;
+    }
+
+    body {
+      background: #f4f6f8;
+      color: #000;
+      line-height: 1.4;
+    }
+
+    a {
+      text-decoration: none;
+      color: inherit;
+    }
+
+    /* Container & Wrapper */
+    .container {
+      max-width: 1200px;
+      margin: 2rem auto;
+      background: #fff;
+      border-radius: 12px;
+      box-shadow: 0 6px 14px rgba(0,0,0,0.1);
+      padding: 2rem 3rem;
+      display: grid;
+      grid-template-columns: 1fr 1.5fr;
+      gap: 3rem;
+    }
+
+    /* HEADER NAVIGATION */
+    header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 1.5rem 3rem;
+      background: #fff;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+      position: sticky;
+      top: 0;
+      z-index: 100;
+    }
+
+    /* Logo */
+    .logo {
+      width: 42px;
+      height: 42px;
+      background: black;
+      border-radius: 50%;
+      position: relative;
+    }
+    .logo::before, .logo::after {
+      content: "";
+      position: absolute;
+      background: white;
+      border-radius: 2px;
+    }
+    .logo::before {
+      width: 60%;
+      height: 6px;
+      top: 50%;
+      left: 20%;
+      transform: translateY(-50%);
+    }
+    .logo::after {
+      width: 18px;
+      height: 6px;
+      top: 12px;
+      left: 12px;
+      transform: rotate(25deg);
+    }
+
+    nav {
+      display: flex;
+      gap: 2.4rem;
+      font-size: 1rem;
+      font-weight: 500;
+      font-family: Arial, sans-serif;
+    }
+
+    nav a:hover {
+      text-decoration: underline;
+    }
+
+    /* Contact phone */
+    .contact-phone {
+      font-family: Arial, sans-serif;
+      font-weight: 500;
+      font-size: 1rem;
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+    }
+
+    .contact-phone svg {
+      width: 20px;
+      height: 20px;
+      fill: black;
+    }
+
+    /* Main Content */
+    .content-left {
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+    }
+
+    .subheading {
+      font-family: Arial, sans-serif;
+      font-weight: 400;
+      font-size: 1.2rem;
+      margin-bottom: 0.5rem;
+      color: #555;
+    }
+
+    h1 {
+      font-size: 3rem;
+      line-height: 1.1;
+      font-weight: 700;
+      font-family: 'Georgia', serif;
+    }
+
+    /* Gallery grid */
+    .gallery {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      grid-template-rows: repeat(3, 140px);
+      gap: 10px;
+      border-radius: 12px;
+      overflow: hidden;
+    }
+
+    .gallery img {
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+      border-radius: 12px;
+      display: block;
+    }
+
+    /* Custom grid item sizing for the collage effect */
+    .gallery-item1 {
+      grid-column: 1 / 2;
+      grid-row: 2 / 4;
+      border-radius: 12px 0 0 12px;
+    }
+    .gallery-item2 {
+      grid-column: 2 / 3;
+      grid-row: 1 / 2;
+      border-radius: 12px 12px 0 0;
+    }
+    .gallery-item3 {
+      grid-column: 2 / 3;
+      grid-row: 2 / 3;
+    }
+    .gallery-item4 {
+      grid-column: 2 / 3;
+      grid-row: 3 / 4;
+      border-radius: 0 0 12px 0;
+    }
+    .gallery-item5 {
+      grid-column: 3 / 4;
+      grid-row: 1 / 3;
+      border-radius: 0 12px 12px 0;
+      height: 100%;
+      object-fit: cover;
+    }
+    .gallery-item6 {
+      grid-column: 3 / 4;
+      grid-row: 3 / 4;
+      border-radius: 0 0 12px 0;
+    }
+
+    /* Responsive Design */
+
+    /* Mobile view */
+    @media (max-width: 768px) {
+      header {
+        padding: 1rem 1.5rem;
+      }
+
+      nav, .contact-phone {
+        display: none;
+      }
+
+      .container {
+        max-width: 480px;
+        margin: 1.5rem;
+        padding: 2rem 1.5rem;
+        grid-template-columns: 1fr;
+        gap: 2.5rem;
+      }
+
+      .content-left {
+        text-align: center;
+      }
+
+      h1 {
+        font-size: 2.5rem;
+      }
+
+      /* Gallery stack vertically for mobile */
+      .gallery {
+        display: flex;
+        flex-direction: column;
+        gap: 10px;
+      }
+
+      .gallery img {
+        border-radius: 12px;
+        height: 180px;
+        object-fit: cover;
+      }
+
+      /* Show hamburger and phone icons */
+      .mobile-icons {
+        display: flex;
+        gap: 1.5rem;
+        align-items: center;
+      }
+
+      .mobile-icon {
+        width: 26px;
+        height: 26px;
+        cursor: pointer;
+        fill: black;
+      }
+    }
+  </style>
+</head>
+<body>
+
+  <header>
+    <div class="logo" aria-label="Logo"></div>
+
+    <!-- Desktop nav -->
+    <nav aria-label="Primary navigation">
+      <a href="#">Awards</a>
+      <a href="#">Shots</a>
+      <a href="#">Blog</a>
+      <a href="#">Who we are</a>
+      <a href="#">Find us</a>
+    </nav>
+
+    <!-- Desktop Phone -->
+    <div class="contact-phone">
+      <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+        <path d="M6.62 10.79a15.053 15.053 0 006.59 6.59l2.2-2.2a1 1 0 011.11-.21 12.51 12.51 0 003.9.62 1 1 0 011 1v3.75a1 1 0 01-1 1A18 18 0 013 5a1 1 0 011-1h3.75a1 1 0 011 1c0 1.42.22 2.79.62 3.9a1 1 0 01-.21 1.11l-2.54 2.54z"/>
+      </svg>
+      +91 XXX XXX XXXXX
+    </div>
+
+    <!-- Mobile icons -->
+    <div class="mobile-icons" aria-label="Mobile Menu" style="display:none;">
+      <svg class="mobile-icon" viewBox="0 0 24 24" aria-hidden="true">
+        <path d="M3 6h18M3 12h18M3 18h18" stroke="black" stroke-width="2" stroke-linecap="round"/>
+      </svg>
+      <svg class="mobile-icon" viewBox="0 0 24 24" aria-hidden="true">
+        <path d="M6.62 10.79a15.053 15.053 0 006.59 6.59l2.2-2.2a1 1 0 011.11-.21 12.51 12.51 0 003.9.62 1 1 0 011 1v3.75a1 1 0 01-1 1A18 18 0 013 5a1 1 0 011-1h3.75a1 1 0 011 1c0 1.42.22 2.79.62 3.9a1 1 0 01-.21 1.11l-2.54 2.54z"/>
+      </svg>
+    </div>
+  </header>
+
+  <main class="container" role="main">
+    <section class="content-left" aria-label="Introduction">
+      <div class="subheading">We are experienced</div>
+      <h1>Photographers</h1>
+    </section>
+
+    <section class="gallery" aria-label="Photographer portfolio gallery">
+      <img src="https://images.unsplash.com/photo-1508214751196-bcfd4ca60f91?auto=format&fit=crop&w=400&q=80" alt="Woman in green" class="gallery-item1" />
+      <img src="https://images.unsplash.com/photo-1524504388940-b1c1722653e1?auto=format&fit=crop&w=400&q=80" alt="Woman in red dress posing outdoors" class="gallery-item2" />
+      <img src="https://images.unsplash.com/photo-1542068829-1115f7259450?auto=format&fit=crop&w=400&q=80" alt="Young woman with long hair looking at camera" class="gallery-item3" />
+      <img src="https://images.unsplash.com/photo-1531427186611-ecfd6d936c79?auto=format&fit=crop&w=400&q=80" alt="Woman in blue dress with fan" class="gallery-item5" />
+      <img src="https://images.unsplash.com/photo-1508214751199-0e62c322fe0b?auto=format&fit=crop&w=400&q=80" alt="Woman lying on red fabric" class="gallery-item6" />
+      <img src="https://images.unsplash.com/photo-1494790108377-be9c29b29330?auto=format&fit=crop&w=400&q=80" alt="Portrait of woman with traditional attire" class="gallery-item4" />
+    </section>
+  </main>
+
+  <script>
+    // Optional: Add JS for mobile menu toggle if needed
+  </script>
+</body>
+</html>
