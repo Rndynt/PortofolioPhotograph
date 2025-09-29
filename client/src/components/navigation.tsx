@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Menu, X, MessageCircle } from "lucide-react";
+import { Menu, X, Waves, MessageCircle } from "lucide-react";
 
 export default function Navigation() {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
@@ -16,8 +16,8 @@ export default function Navigation() {
     <header className="fixed top-0 w-full z-50 bg-white/90 backdrop-blur-sm">
       <nav className="px-8 md:px-12 py-6">
         <div className="flex justify-between items-center">
-          <div className="text-xl font-light tracking-wide text-black" data-testid="logo">
-            AC
+          <div className="text-xl font-mono font-medium tracking-[-0.3em] text-black" data-testid="logo">
+            FZ<span className="text-gray-400"> L</span>
           </div>
 
           {/* Desktop Navigation */}
@@ -60,7 +60,7 @@ export default function Navigation() {
             onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
             data-testid="mobile-menu-button"
           >
-            {mobileMenuOpen ? <X className="h-5 w-5" /> : <Menu className="h-5 w-5" />}
+            {mobileMenuOpen ? <X className="h-5 w-5" /> : <Waves className="h-5 w-5" />}
           </button>
         </div>
 

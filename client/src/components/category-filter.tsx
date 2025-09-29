@@ -16,7 +16,7 @@ export default function CategoryFilter({ selectedCategory, onCategoryChange }: C
               onClick={() => onCategoryChange(category)}
               data-testid={`filter-chip-${category.toLowerCase()}`}
               className={`
-                px-5 py-2.5 rounded-full text-sm font-medium tracking-wide whitespace-nowrap
+                px-5 py-2.5 rounded-full text-xs font-medium tracking-wide whitespace-nowrap
                 transition-all duration-300 ease-in-out
                 ${selectedCategory === category
                   ? 'bg-black text-white shadow-lg scale-105'
