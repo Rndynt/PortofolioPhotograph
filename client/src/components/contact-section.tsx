@@ -14,7 +14,7 @@ export default function ContactSection() {
   const [formData, setFormData] = useState({
     name: "",
     email: "",
-    subject: "",
+    subject: "General Inquiry",
     message: ""
   });
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -48,7 +48,7 @@ export default function ContactSection() {
       setFormData({
         name: "",
         email: "",
-        subject: "",
+        subject: "General Inquiry",
         message: ""
       });
     } catch (error) {
@@ -70,41 +70,23 @@ export default function ContactSection() {
   ];
 
   return (
-    <section id="contact" className="py-20 bg-background">
-      <div className="container mx-auto px-6">
-        <div className="max-w-4xl mx-auto">
-          <div className="text-center mb-16">
-            <motion.h2 
-              initial={{ opacity: 0, y: 30 }}
-              whileInView={{ opacity: 1, y: 0 }}
-              transition={{ duration: 0.8 }}
-              className="text-4xl md:text-5xl font-light mb-4"
-              data-testid="contact-title"
-            >
-              Get In Touch
-            </motion.h2>
-            <motion.p 
-              initial={{ opacity: 0, y: 30 }}
-              whileInView={{ opacity: 1, y: 0 }}
-              transition={{ duration: 0.8, delay: 0.2 }}
-              className="text-xl text-muted-foreground"
-              data-testid="contact-subtitle"
-            >
-              Ready to capture your special moments? Let's discuss your project.
-            </motion.p>
-          </div>
+    <section id="contact" className="py-20 bg-white">
+      <div className="px-8 md:px-12">
+        <div className="max-w-2xl">
+          <h2 className="text-3xl md:text-4xl font-light mb-8 text-black tracking-wide" data-testid="contact-title">
+            CONTACT
+          </h2>
+          <p className="text-gray-700 mb-12" data-testid="contact-subtitle">
+            Available for assignments worldwide. Let's create something beautiful together.
+          </p>
           
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-16">
             {/* Contact Form */}
-            <motion.div
-              initial={{ opacity: 0, x: -30 }}
-              whileInView={{ opacity: 1, x: 0 }}
-              transition={{ duration: 0.8 }}
-            >
+            <div>
               <form onSubmit={handleSubmit} className="space-y-6" data-testid="contact-form">
                 <div>
-                  <Label htmlFor="name" className="block text-sm font-medium text-foreground mb-2">
-                    Full Name
+                  <Label htmlFor="name" className="block text-sm font-light text-black mb-2">
+                    NAME *
                   </Label>
                   <Input
                     type="text"
@@ -113,15 +95,15 @@ export default function ContactSection() {
                     value={formData.name}
                     onChange={handleInputChange}
                     required
-                    placeholder="Your full name"
-                    className="w-full"
+                    placeholder=""
+                    className="w-full border-0 border-b border-gray-300 rounded-none bg-transparent px-0 focus:border-black focus:ring-0"
                     data-testid="input-name"
                   />
                 </div>
                 
                 <div>
-                  <Label htmlFor="email" className="block text-sm font-medium text-foreground mb-2">
-                    Email Address
+                  <Label htmlFor="email" className="block text-sm font-light text-black mb-2">
+                    EMAIL *
                   </Label>
                   <Input
                     type="email"
@@ -130,108 +112,57 @@ export default function ContactSection() {
                     value={formData.email}
                     onChange={handleInputChange}
                     required
-                    placeholder="your@email.com"
-                    className="w-full"
+                    placeholder=""
+                    className="w-full border-0 border-b border-gray-300 rounded-none bg-transparent px-0 focus:border-black focus:ring-0"
                     data-testid="input-email"
                   />
                 </div>
                 
-                <div>
-                  <Label htmlFor="subject" className="block text-sm font-medium text-foreground mb-2">
-                    Subject
-                  </Label>
-                  <Select value={formData.subject} onValueChange={handleSelectChange} required>
-                    <SelectTrigger className="w-full" data-testid="select-subject">
-                      <SelectValue placeholder="Select a service" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="portrait">Portrait Session</SelectItem>
-                      <SelectItem value="wedding">Wedding Photography</SelectItem>
-                      <SelectItem value="event">Event Photography</SelectItem>
-                      <SelectItem value="commercial">Commercial Work</SelectItem>
-                      <SelectItem value="other">Other</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
                 
                 <div>
-                  <Label htmlFor="message" className="block text-sm font-medium text-foreground mb-2">
-                    Message
+                  <Label htmlFor="message" className="block text-sm font-light text-black mb-2">
+                    MESSAGE *
                   </Label>
                   <Textarea
                     id="message"
                     name="message"
                     value={formData.message}
                     onChange={handleInputChange}
-                    rows={5}
+                    rows={4}
                     required
-                    placeholder="Tell me about your project..."
-                    className="w-full resize-none"
+                    placeholder=""
+                    className="w-full border-0 border-b border-gray-300 rounded-none bg-transparent px-0 focus:border-black focus:ring-0 resize-none"
                     data-testid="textarea-message"
                   />
                 </div>
                 
                 <Button
                   type="submit"
-                  className="w-full bg-primary text-primary-foreground py-3 px-6 rounded-md hover:bg-primary/90 transition-colors duration-200 font-medium"
+                  className="bg-black text-white py-3 px-8 hover:bg-gray-800 transition-colors duration-200 font-light text-sm tracking-wide"
                   disabled={isSubmitting}
                   data-testid="button-submit-contact"
                 >
-                  {isSubmitting ? "Sending..." : "Send Message"}
+                  {isSubmitting ? "SENDING..." : "SEND"}
                 </Button>
               </form>
-            </motion.div>
+            </div>
             
             {/* Contact Information */}
-            <motion.div 
-              initial={{ opacity: 0, x: 30 }}
-              whileInView={{ opacity: 1, x: 0 }}
-              transition={{ duration: 0.8, delay: 0.2 }}
-              className="space-y-8"
-            >
+            <div className="space-y-8">
               <div>
-                <h3 className="text-2xl font-medium mb-6" data-testid="contact-info-title">Contact Information</h3>
-                <div className="space-y-4">
-                  <div className="flex items-center space-x-4" data-testid="contact-email">
-                    <Mail className="text-primary text-xl w-6" />
-                    <span className="text-foreground">alex@alexchenphoto.com</span>
+                <div className="space-y-4 text-gray-700">
+                  <div data-testid="contact-email">
+                    alex@alexchenphoto.com
                   </div>
-                  <div className="flex items-center space-x-4" data-testid="contact-phone">
-                    <Phone className="text-primary text-xl w-6" />
-                    <span className="text-foreground">+1 (555) 123-4567</span>
+                  <div data-testid="contact-phone">
+                    +1 (555) 123-4567
                   </div>
-                  <div className="flex items-center space-x-4" data-testid="contact-location">
-                    <MapPin className="text-primary text-xl w-6" />
-                    <span className="text-foreground">New York, NY</span>
+                  <div data-testid="contact-location">
+                    New York, NY
                   </div>
                 </div>
               </div>
-              
-              <div>
-                <h3 className="text-2xl font-medium mb-6" data-testid="social-title">Follow My Work</h3>
-                <div className="flex space-x-4">
-                  {socialLinks.map((social, index) => (
-                    <a
-                      key={index}
-                      href={social.href}
-                      className="bg-muted hover:bg-primary text-muted-foreground hover:text-primary-foreground p-3 rounded-lg transition-colors duration-200"
-                      data-testid={social.testId}
-                    >
-                      <i className={`${social.icon} text-xl`}></i>
-                    </a>
-                  ))}
-                </div>
-              </div>
-              
-              <div>
-                <h3 className="text-2xl font-medium mb-6" data-testid="studio-hours-title">Studio Hours</h3>
-                <div className="space-y-2 text-muted-foreground" data-testid="studio-hours">
-                  <p>Monday - Friday: 9:00 AM - 7:00 PM</p>
-                  <p>Saturday: 10:00 AM - 5:00 PM</p>
-                  <p>Sunday: By appointment only</p>
-                </div>
-              </div>
-            </motion.div>
+            </div>
           </div>
         </div>
       </div>

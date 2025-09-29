@@ -13,86 +13,72 @@ export default function Navigation() {
   };
 
   return (
-    <header className="fixed top-0 w-full bg-background/80 backdrop-blur-sm border-b border-border z-50">
-      <nav className="container mx-auto px-6 py-4">
+    <header className="fixed top-0 w-full z-50 bg-white/90 backdrop-blur-sm">
+      <nav className="px-8 md:px-12 py-6">
         <div className="flex justify-between items-center">
-          <div className="text-2xl font-bold text-primary" data-testid="logo">
-            Alex Chen
+          <div className="text-xl font-light tracking-wide text-black" data-testid="logo">
+            AC
           </div>
 
           {/* Desktop Navigation */}
-          <div className="hidden md:flex space-x-8">
-            <button
-              onClick={() => scrollToSection("home")}
-              className="text-foreground hover:text-primary transition-colors duration-200"
-              data-testid="nav-home"
-            >
-              Home
-            </button>
+          <div className="hidden md:flex space-x-12">
             <button
               onClick={() => scrollToSection("portfolio")}
-              className="text-foreground hover:text-primary transition-colors duration-200"
+              className="text-black font-light hover:opacity-70 transition-opacity text-sm tracking-wide"
               data-testid="nav-portfolio"
             >
-              Portfolio
+              WORK
             </button>
             <button
               onClick={() => scrollToSection("about")}
-              className="text-foreground hover:text-primary transition-colors duration-200"
+              className="text-black font-light hover:opacity-70 transition-opacity text-sm tracking-wide"
               data-testid="nav-about"
             >
-              About
+              ABOUT
             </button>
             <button
               onClick={() => scrollToSection("contact")}
-              className="text-foreground hover:text-primary transition-colors duration-200"
+              className="text-black font-light hover:opacity-70 transition-opacity text-sm tracking-wide"
               data-testid="nav-contact"
             >
-              Contact
+              CONTACT
             </button>
           </div>
 
           {/* Mobile Menu Button */}
           <button
-            className="md:hidden text-foreground hover:text-primary"
+            className="md:hidden text-black"
             onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
             data-testid="mobile-menu-button"
           >
-            {mobileMenuOpen ? <X className="text-xl" /> : <Menu className="text-xl" />}
+            {mobileMenuOpen ? <X className="h-5 w-5" /> : <Menu className="h-5 w-5" />}
           </button>
         </div>
 
         {/* Mobile Navigation */}
         {mobileMenuOpen && (
-          <div className="md:hidden absolute top-full left-0 w-full bg-card border-b border-border">
-            <div className="px-6 py-4 space-y-4">
-              <button
-                onClick={() => scrollToSection("home")}
-                className="block text-foreground hover:text-primary transition-colors w-full text-left"
-                data-testid="mobile-nav-home"
-              >
-                Home
-              </button>
+          <div className="md:hidden absolute top-full left-0 w-full bg-white border-t border-gray-200">
+            <div className="px-8 py-6 space-y-6">
               <button
                 onClick={() => scrollToSection("portfolio")}
-                className="block text-foreground hover:text-primary transition-colors w-full text-left"
+                className="block text-black font-light hover:opacity-70 transition-opacity w-full text-left text-sm tracking-wide"
                 data-testid="mobile-nav-portfolio"
               >
-                Portfolio
+                WORK
               </button>
               <button
                 onClick={() => scrollToSection("about")}
-                className="block text-foreground hover:text-primary transition-colors w-full text-left"
+                className="block text-black font-light hover:opacity-70 transition-opacity w-full text-left text-sm tracking-wide"
                 data-testid="mobile-nav-about"
               >
-                About
+                ABOUT
               </button>
               <button
                 onClick={() => scrollToSection("contact")}
-                className="block text-foreground hover:text-primary transition-colors w-full text-left"
+                className="block text-black font-light hover:opacity-70 transition-opacity w-full text-left text-sm tracking-wide"
                 data-testid="mobile-nav-contact"
               >
-                Contact
+                CONTACT
               </button>
             </div>
           </div>
