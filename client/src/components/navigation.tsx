@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Menu, X } from "lucide-react";
+import { Menu, X, MessageCircle } from "lucide-react";
 
 export default function Navigation() {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
@@ -21,7 +21,7 @@ export default function Navigation() {
           </div>
 
           {/* Desktop Navigation */}
-          <div className="hidden md:flex space-x-12">
+          <div className="hidden md:flex space-x-12 items-center">
             <button
               onClick={() => scrollToSection("portfolio")}
               className="text-black font-light hover:opacity-70 transition-opacity text-sm tracking-wide"
@@ -43,6 +43,15 @@ export default function Navigation() {
             >
               CONTACT
             </button>
+            <a
+              href="https://wa.me/6281234567890"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="text-black hover:opacity-70 transition-opacity"
+              data-testid="nav-whatsapp"
+            >
+              <MessageCircle className="h-5 w-5" />
+            </a>
           </div>
 
           {/* Mobile Menu Button */}
@@ -80,6 +89,16 @@ export default function Navigation() {
               >
                 CONTACT
               </button>
+              <a
+                href="https://wa.me/6281234567890"
+                target="_blank"
+                rel="noopener noreferrer"
+                onClick={() => setMobileMenuOpen(false)}
+                className="block text-black font-light hover:opacity-70 transition-opacity w-full text-left text-sm tracking-wide"
+                data-testid="mobile-nav-whatsapp"
+              >
+                WHATSAPP
+              </a>
             </div>
           </div>
         )}
