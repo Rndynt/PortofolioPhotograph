@@ -4,7 +4,7 @@ import img8024 from '@assets/IMG_8024_1759174260300.jpeg';
 export interface PortfolioImageData {
   id: string;
   title: string;
-  category: 'portrait' | 'landscape' | 'urban' | 'wedding';
+  category: 'wedding' | 'graduation' | 'event' | 'portrait' | 'commercial';
   imageUrl: string;
   altText: string;
   description?: string;
@@ -31,31 +31,31 @@ export const portfolioImages: PortfolioImageData[] = [
   {
     id: '3',
     title: 'City Lines',
-    category: 'urban',
+    category: 'commercial',
     imageUrl: 'https://images.unsplash.com/photo-1449824913935-59a10b8d2000?ixlib=rb-4.0.3&ixid=M3wxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8fA%3D%3D&auto=format&fit=crop&w=800&q=80',
     altText: 'Urban architectural details and city life',
     featured: true
   },
   {
     id: '4',
-    title: 'Bridal Portrait',
-    category: 'portrait',
+    title: 'Graduation Portrait',
+    category: 'graduation',
     imageUrl: 'https://images.unsplash.com/photo-1469371670807-013ccf25f16a?ixlib=rb-4.0.3&ixid=M3wxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8fA%3D%3D&auto=format&fit=crop&w=600&q=80',
     altText: 'Beautiful bridal portrait with soft natural lighting',
     featured: false
   },
   {
     id: '5',
-    title: 'Lake Reflection',
-    category: 'landscape',
+    title: 'Corporate Event',
+    category: 'event',
     imageUrl: 'https://images.unsplash.com/photo-1506905925346-21bda4d32df4?ixlib=rb-4.0.3&ixid=M3wxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8fA%3D%3D&auto=format&fit=crop&w=600&q=80',
     altText: 'Serene lake reflection with mountain backdrop',
     featured: false
   },
   {
     id: '6',
-    title: 'Street Photography',
-    category: 'urban',
+    title: 'Conference Event',
+    category: 'event',
     imageUrl: 'https://images.unsplash.com/photo-1477959858617-67f85cf4f1df?ixlib=rb-4.0.3&ixid=M3wxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8fA%3D%3D&auto=format&fit=crop&w=600&q=80',
     altText: 'Dynamic street scene with motion blur',
     featured: false
@@ -78,24 +78,24 @@ export const portfolioImages: PortfolioImageData[] = [
   },
   {
     id: '9',
-    title: 'Coastal Landscape',
-    category: 'landscape',
+    title: 'Outdoor Event',
+    category: 'event',
     imageUrl: 'https://images.unsplash.com/photo-1506197603052-3cc9c3a201bd?ixlib=rb-4.0.3&ixid=M3wxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8fA%3D%3D&auto=format&fit=crop&w=600&q=80',
     altText: 'Dramatic coastal scene with crashing waves',
     featured: false
   },
   {
     id: '10',
-    title: 'Modern Architecture',
-    category: 'urban',
+    title: 'Commercial Shoot',
+    category: 'commercial',
     imageUrl: 'https://images.unsplash.com/photo-1449824913935-59a10b8d2000?ixlib=rb-4.0.3&ixid=M3wxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8fA%3D%3D&auto=format&fit=crop&w=600&q=80',
     altText: 'Modern architectural detail with geometric patterns',
     featured: false
   },
   {
     id: '11',
-    title: 'Artistic Portrait',
-    category: 'portrait',
+    title: 'Graduation Ceremony',
+    category: 'graduation',
     imageUrl: 'https://images.unsplash.com/photo-1544005313-94ddf0286df2?ixlib=rb-4.0.3&ixid=M3wxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8fA%3D%3D&auto=format&fit=crop&w=600&q=80',
     altText: 'Artistic portrait with creative lighting',
     featured: false
