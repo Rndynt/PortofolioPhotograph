@@ -18,7 +18,7 @@ export default function HeroSection() {
               We are experienced
             </p>
             <h1 className="font-serif text-xl sm:text-2xl md:text-4xl font-bold leading-tight" style={{ fontFamily: 'Georgia, serif' }} data-testid="hero-heading">
-              Photographers
+              Story Framer
             </h1>
           </div>
 
