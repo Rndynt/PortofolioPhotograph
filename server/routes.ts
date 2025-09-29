@@ -54,14 +54,15 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.get("/api/contact", async (req, res) => {
-    try {
-      const submissions = await storage.getContactSubmissions();
-      res.json(submissions);
-    } catch (error) {
-      res.status(500).json({ message: "Failed to fetch contact submissions" });
-    }
-  });
+  // Contact submissions retrieval removed for security - contains PII
+  // app.get("/api/contact", async (req, res) => {
+  //   try {
+  //     const submissions = await storage.getContactSubmissions();
+  //     res.json(submissions);
+  //   } catch (error) {
+  //     res.status(500).json({ message: "Failed to fetch contact submissions" });
+  //   }
+  // });
 
   const httpServer = createServer(app);
   return httpServer;
