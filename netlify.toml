@@ -13,8 +13,8 @@
 # - Ensure auth tokens are validated on each request
 
 [build]
-  command = "vite build && cp -r dist/public dist/client"
-  publish = "dist/client"
+  command = "npm ci && npm run build:frontend && npm run build:functions"
+  publish = "dist/public"
   functions = "netlify/functions"
 
 [build.environment]
