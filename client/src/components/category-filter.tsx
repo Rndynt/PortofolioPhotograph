@@ -7,7 +7,7 @@ const categories = ['All', 'Wedding', 'Graduation', 'Event', 'Portrait', 'Commer
 
 export default function CategoryFilter({ selectedCategory, onCategoryChange }: CategoryFilterProps) {
   return (
-    <div className="w-full px-6 sm:px-8 md:px-12 py-8 bg-white">
+    <div id="portfolio" className="w-full px-6 sm:px-8 md:px-12 py-8 bg-white">
       <div className="max-w-4xl mx-auto">
         <div className="flex flex-wrap justify-center items-center gap-3 sm:gap-4">
           {categories.map((category) => (

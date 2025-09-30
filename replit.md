@@ -46,7 +46,38 @@ The backend follows a modular architecture with separate concerns for routing, s
 
 The application uses environment variables for configuration and supports both development and production deployment scenarios. The architecture is designed to be scalable and maintainable with clear separation of concerns between frontend presentation, backend logic, and data persistence layers.
 
+## Recent Changes
+
+### Mobile Navigation Scroll Fix (Sept 30, 2025)
+Fixed mobile menu scroll-to-section functionality that was broken after adding Framer Motion animations:
+- Added `id="portfolio"` to CategoryFilter component for "Work" menu navigation
+- Updated scroll timing: menu closes first, then scrolls after 100ms delay to prevent animation interference
+- Changed overflow handling on mobile menu animation container
+- Navigation now properly scrolls to sections: Work → Category filter, About → About section, Contact → Contact section
+
 ## Deployment
+
+### Replit Deployment
+The application is configured for deployment on Replit with the following setup:
+
+**Development:**
+- Command: `npm run dev`
+- Uses tsx to run TypeScript directly without compilation
+- Vite dev server with HMR on port 5000
+- Host configured as `0.0.0.0` for Replit environment
+- Vite configured with `allowedHosts: true` for Replit's proxy
+
+**Production:**
+- Build: `npm run build` (builds frontend only with Vite)
+- Start: `npm run start` (uses tsx to run server in production mode)
+- tsx moved from devDependencies to dependencies for production use
+- Server serves static files from `dist/public` in production
+- Configured for autoscale deployment on Replit
+
+**Important Notes:**
+- Both dev and production use tsx for TypeScript execution (no separate compilation step)
+- The app uses in-memory storage by default; configure database for persistence
+- Port 5000 is the only non-firewalled port and must be used for the frontend
 
 ### Netlify Functions Serverless Deployment
 The application is configured for serverless deployment on Netlify with the following setup:
