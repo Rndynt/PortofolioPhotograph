@@ -6,6 +6,18 @@ const app = express();
 app.use(express.json());
 app.use(express.urlencoded({ extended: false }));
 
-await registerRoutes(app);
+let isInitialized = false;
 
-export const handler = serverless(app);
+async function initializeApp() {
+  if (!isInitialized) {
+    await registerRoutes(app);
+    isInitialized = true;
+  }
+}
+
+const serverlessHandler = serverless(app);
+
+export const handler = async (event: any, context: any) => {
+  await initializeApp();
+  return serverlessHandler(event, context);
+};

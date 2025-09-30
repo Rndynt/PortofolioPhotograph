@@ -4,8 +4,16 @@
 # Key: DATABASE_URL
 # Value: Your PostgreSQL connection string
 
+# Session/Auth Compatibility:
+# This app uses stateless architecture with in-memory storage.
+# No session middleware (express-session) is currently used.
+# For production with multiple function instances, consider:
+# - Using JWT-based authentication for stateless auth
+# - External session store (Redis, DynamoDB) if sessions are needed
+# - Ensure auth tokens are validated on each request
+
 [build]
-  command = "npm run build && rm -rf dist/client && cp -r dist/public dist/client"
+  command = "vite build && cp -r dist/public dist/client"
   publish = "dist/client"
   functions = "netlify/functions"
 
