@@ -45,3 +45,27 @@ The backend follows a modular architecture with separate concerns for routing, s
 - **Development Tools**: Replit-specific plugins for development environment integration
 
 The application uses environment variables for configuration and supports both development and production deployment scenarios. The architecture is designed to be scalable and maintainable with clear separation of concerns between frontend presentation, backend logic, and data persistence layers.
+
+## Deployment
+
+### Netlify Functions Serverless Deployment
+The application is configured for serverless deployment on Netlify with the following setup:
+
+- **Serverless Function**: API routes wrapped with serverless-http adapter in `netlify/functions/api.ts`
+- **Build Configuration**: `netlify.toml` defines build commands, redirects, and function settings
+- **Build Process**: Vite builds the frontend to `dist/client`, functions are built to `netlify/functions`
+- **Routing**: API requests (`/api/*`) are redirected to `/.netlify/functions/api/:splat`
+- **SPA Support**: All non-API routes redirect to `index.html` for client-side routing
+- **Environment Variables**: Set `DATABASE_URL` in Netlify UI for production database connection
+- **Node Version**: Configured to use Node.js 20 for compatibility
+
+**Deployment Steps:**
+1. Connect repository to Netlify
+2. Configure environment variables in Netlify UI (especially `DATABASE_URL`)
+3. Deploy - Netlify will automatically run the build command and deploy functions
+4. The app will be available at the Netlify-provided URL
+
+**Important Notes:**
+- The app uses stateless architecture suitable for serverless deployment
+- In-memory storage is used by default; configure external database for production persistence
+- No session middleware currently used; consider JWT or external session store for auth in production
