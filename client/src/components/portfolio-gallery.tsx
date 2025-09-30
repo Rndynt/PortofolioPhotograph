@@ -37,7 +37,7 @@ export default function PortfolioGallery({ selectedCategory = 'all', onProjectCl
         </div>
         
         <motion.div 
-          className={`grid gap-1 ${isMobileGrid ? 'grid-cols-3' : 'grid-cols-1'} md:grid-cols-2 lg:grid-cols-3`}
+          className={`grid gap-1 ${isMobileGrid ? 'grid-cols-3' : 'grid-cols-2'} md:grid-cols-2 lg:grid-cols-3`}
           layout
         >
           <AnimatePresence mode="popLayout">
