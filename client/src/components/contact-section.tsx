@@ -152,13 +152,13 @@ export default function ContactSection() {
               <div>
                 <div className="space-y-4 text-gray-700">
                   <div data-testid="contact-email">
-                    alex@alexchenphoto.com
+                    fzl@moment.com
                   </div>
                   <div data-testid="contact-phone">
                     +1 (555) 123-4567
                   </div>
                   <div data-testid="contact-location">
-                    New York, NY
+                    Banda Aceh, ID
                   </div>
                 </div>
               </div>
