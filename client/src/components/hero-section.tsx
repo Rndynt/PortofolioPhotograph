@@ -24,14 +24,14 @@ export default function HeroSection() {
 
           {/* Right Gallery - Mobile: 3 cols (5 images), Desktop: 4 cols (8 images) */}
           <div 
-            className="grid grid-cols-3 sm:grid-cols-4 grid-rows-[repeat(3,80px)] sm:grid-rows-[repeat(4,110px)] md:grid-rows-[repeat(4,120px)] gap-[8px] sm:gap-[10px] overflow-hidden min-w-0"
+            className="grid grid-cols-8 sm:grid-cols-4 grid-rows-[repeat(5,100px)] sm:grid-rows-[repeat(4,110px)] md:grid-rows-[repeat(4,120px)] gap-[8px] sm:gap-[10px] overflow-hidden min-w-0"
             data-testid="hero-gallery"
           >
             {/* Image 1 - Mobile: col-[1/2] row-[2/4], Desktop: col-[1/2] row-[1/4] (3 rows tall, top-left) */}
             <img 
               src={image1} 
               alt="Professional photography portrait" 
-              className="col-[1/2] row-[2/4] sm:col-[1/2] sm:row-[1/4] w-full h-full object-cover"
+              className="col-[1/5] row-[4/6] rounded-t-lg sm:col-[1/2] sm:row-[1/4] w-full h-full object-cover"
               loading="lazy"
               data-testid="hero-image-1"
             />
@@ -40,7 +40,7 @@ export default function HeroSection() {
             <img 
               src={image2} 
               alt="Professional photography portrait" 
-              className="col-[2/3] row-[1/2] sm:col-[1/2] sm:row-[4/5] w-full h-full object-cover"
+              className="col-[5/9] row-[5/6] rounded-t-lg sm:col-[1/2] sm:row-[4/5] w-full h-full object-cover"
               loading="lazy"
               data-testid="hero-image-2"
             />
@@ -49,7 +49,7 @@ export default function HeroSection() {
             <img 
               src={image3} 
               alt="Professional photography portrait" 
-              className="col-[2/3] row-[2/3] sm:col-[2/3] sm:row-[1/3] w-full h-full object-cover"
+              className="col-[1/5] row-[3/4] rounded-t-lg sm:col-[2/3] sm:row-[1/3] w-full h-full object-cover"
               loading="lazy"
               data-testid="hero-image-3"
             />
@@ -58,7 +58,7 @@ export default function HeroSection() {
             <img 
               src={image4} 
               alt="Professional photography portrait" 
-              className="col-[2/3] row-[3/4] sm:col-[2/3] sm:row-[3/5] w-full h-full object-cover"
+              className="col-[5/9] row-[3/5] rounded-t-lg sm:col-[2/3] sm:row-[3/5] w-full h-full object-cover"
               loading="lazy"
               data-testid="hero-image-4"
             />
@@ -67,7 +67,7 @@ export default function HeroSection() {
             <img 
               src={image5} 
               alt="Professional photography portrait" 
-              className="col-[3/4] row-[1/3] sm:col-[3/4] sm:row-[1/2] w-full h-full object-cover"
+              className="col-[1/5] row-[2/3] rounded-t-lg sm:col-[3/4] sm:row-[1/2] w-full h-full object-cover"
               loading="lazy"
               data-testid="hero-image-5"
             />
@@ -76,7 +76,7 @@ export default function HeroSection() {
             <img 
               src={image6} 
               alt="Professional photography portrait" 
-              className="hidden sm:block sm:col-[3/4] sm:row-[2/5] w-full h-full object-cover"
+              className="col-[5/9] row-[1/3] rounded-t-lg sm:col-[3/4] sm:row-[2/5] w-full h-full object-cover"
               loading="lazy"
               data-testid="hero-image-6"
             />
