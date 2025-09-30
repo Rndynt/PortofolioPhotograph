@@ -69,3 +69,9 @@ The application is configured for serverless deployment on Netlify with the foll
 - The app uses stateless architecture suitable for serverless deployment
 - In-memory storage is used by default; configure external database for production persistence
 - No session middleware currently used; consider JWT or external session store for auth in production
+
+**Build Configuration:**
+- The project uses a custom esbuild script (`scripts/build-functions.mjs`) to build Netlify functions
+- This script uses `esbuild-plugin-alias` to resolve TypeScript path aliases (`@shared`) during the build
+- The build script is configured in `package.json` under `build:functions`
+- This ensures the Netlify serverless functions can properly bundle and resolve all dependencies
