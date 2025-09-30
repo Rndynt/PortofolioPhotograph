@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { Menu, X, Waves, MessageCircle } from "lucide-react";
+import { motion, AnimatePresence } from "framer-motion";
 
 export default function Navigation() {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
@@ -65,43 +66,57 @@ export default function Navigation() {
         </div>
 
         {/* Mobile Navigation */}
-        {mobileMenuOpen && (
-          <div className="md:hidden absolute top-full left-0 w-full bg-white border-t border-gray-200">
-            <div className="px-8 py-6 space-y-6">
-              <button
-                onClick={() => scrollToSection("portfolio")}
-                className="block text-black font-light hover:opacity-70 transition-opacity w-full text-left text-sm tracking-wide"
-                data-testid="mobile-nav-portfolio"
+        <AnimatePresence>
+          {mobileMenuOpen && (
+            <motion.div
+              initial={{ height: 0, opacity: 0 }}
+              animate={{ height: "auto", opacity: 1 }}
+              exit={{ height: 0, opacity: 0 }}
+              transition={{ duration: 0.3, ease: "easeInOut" }}
+              className="md:hidden absolute top-full left-0 w-full bg-white border-t border-gray-200 overflow-hidden"
+            >
+              <motion.div 
+                initial={{ y: -20 }}
+                animate={{ y: 0 }}
+                exit={{ y: -20 }}
+                transition={{ duration: 0.3, ease: "easeOut" }}
+                className="px-8 py-6 space-y-6"
               >
-                WORK
-              </button>
-              <button
-                onClick={() => scrollToSection("about")}
-                className="block text-black font-light hover:opacity-70 transition-opacity w-full text-left text-sm tracking-wide"
-                data-testid="mobile-nav-about"
-              >
-                ABOUT
-              </button>
-              <button
-                onClick={() => scrollToSection("contact")}
-                className="block text-black font-light hover:opacity-70 transition-opacity w-full text-left text-sm tracking-wide"
-                data-testid="mobile-nav-contact"
-              >
-                CONTACT
-              </button>
-              <a
-                href="https://wa.me/6281234567890"
-                target="_blank"
-                rel="noopener noreferrer"
-                onClick={() => setMobileMenuOpen(false)}
-                className="block text-black font-light hover:opacity-70 transition-opacity w-full text-left text-sm tracking-wide"
-                data-testid="mobile-nav-whatsapp"
-              >
-                WHATSAPP
-              </a>
-            </div>
-          </div>
-        )}
+                <button
+                  onClick={() => scrollToSection("portfolio")}
+                  className="block text-black font-light hover:opacity-70 transition-opacity w-full text-left text-sm tracking-wide"
+                  data-testid="mobile-nav-portfolio"
+                >
+                  WORK
+                </button>
+                <button
+                  onClick={() => scrollToSection("about")}
+                  className="block text-black font-light hover:opacity-70 transition-opacity w-full text-left text-sm tracking-wide"
+                  data-testid="mobile-nav-about"
+                >
+                  ABOUT
+                </button>
+                <button
+                  onClick={() => scrollToSection("contact")}
+                  className="block text-black font-light hover:opacity-70 transition-opacity w-full text-left text-sm tracking-wide"
+                  data-testid="mobile-nav-contact"
+                >
+                  CONTACT
+                </button>
+                <a
+                  href="https://wa.me/6281234567890"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  onClick={() => setMobileMenuOpen(false)}
+                  className="block text-black font-light hover:opacity-70 transition-opacity w-full text-left text-sm tracking-wide"
+                  data-testid="mobile-nav-whatsapp"
+                >
+                  WHATSAPP
+                </a>
+              </motion.div>
+            </motion.div>
+          )}
+        </AnimatePresence>
       </nav>
     </header>
   );
