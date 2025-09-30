@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Menu, X, Waves, MessageCircle } from "lucide-react";
+import { Menu, X, Waves, MessageCircle, ExternalLink } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 
 export default function Navigation() {
@@ -10,7 +10,14 @@ export default function Navigation() {
     setTimeout(() => {
       const element = document.getElementById(sectionId);
       if (element) {
-        element.scrollIntoView({ behavior: "smooth" });
+        const headerOffset = 100;
+        const elementPosition = element.getBoundingClientRect().top;
+        const offsetPosition = elementPosition + window.pageYOffset - headerOffset;
+        
+        window.scrollTo({
+          top: offsetPosition,
+          behavior: "smooth"
+        });
       }
     }, 100);
   };
@@ -50,10 +57,11 @@ export default function Navigation() {
               href="https://wa.me/6281234567890"
               target="_blank"
               rel="noopener noreferrer"
-              className="text-black hover:opacity-70 transition-opacity"
+              className="text-black hover:opacity-70 transition-opacity flex items-center gap-1"
               data-testid="nav-whatsapp"
             >
               <MessageCircle className="h-5 w-5" />
+              <ExternalLink className="h-3 w-3" />
             </a>
           </div>
 
@@ -111,10 +119,11 @@ export default function Navigation() {
                   target="_blank"
                   rel="noopener noreferrer"
                   onClick={() => setMobileMenuOpen(false)}
-                  className="block text-black font-light hover:opacity-70 transition-opacity w-full text-left text-sm tracking-wide"
+                  className="flex items-center gap-2 text-black font-light hover:opacity-70 transition-opacity w-full text-sm tracking-wide"
                   data-testid="mobile-nav-whatsapp"
                 >
                   WHATSAPP
+                  <ExternalLink className="h-3 w-3" />
                 </a>
               </motion.div>
             </motion.div>

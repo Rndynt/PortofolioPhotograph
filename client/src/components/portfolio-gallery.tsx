@@ -1,5 +1,7 @@
+import { useState } from "react";
 import { portfolioProjects } from "@/lib/portfolio-data";
 import { motion, AnimatePresence } from "framer-motion";
+import { Grid3x3, LayoutGrid } from "lucide-react";
 
 interface PortfolioGalleryProps {
   selectedCategory?: string;
@@ -7,6 +9,8 @@ interface PortfolioGalleryProps {
 }
 
 export default function PortfolioGallery({ selectedCategory = 'all', onProjectClick }: PortfolioGalleryProps) {
+  const [isMobileGrid, setIsMobileGrid] = useState(false);
+  
   const filteredProjects = selectedCategory === 'all' 
     ? portfolioProjects 
     : portfolioProjects.filter(project => project.category === selectedCategory);
@@ -20,8 +24,20 @@ export default function PortfolioGallery({ selectedCategory = 'all', onProjectCl
   return (
     <section id="portfolio" className="py-20 bg-white">
       <div className="px-8 md:px-12">
+        {/* Mobile Grid Toggle Button */}
+        <div className="flex justify-end mb-4 md:hidden">
+          <button
+            onClick={() => setIsMobileGrid(!isMobileGrid)}
+            className="p-2 text-black hover:bg-gray-100 rounded-lg transition-colors"
+            data-testid="toggle-grid-view"
+            aria-label={isMobileGrid ? "Switch to single column" : "Switch to grid view"}
+          >
+            {isMobileGrid ? <LayoutGrid className="h-5 w-5" /> : <Grid3x3 className="h-5 w-5" />}
+          </button>
+        </div>
+        
         <motion.div 
-          className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-1"
+          className={`grid gap-1 ${isMobileGrid ? 'grid-cols-3' : 'grid-cols-1'} md:grid-cols-2 lg:grid-cols-3`}
           layout
         >
           <AnimatePresence mode="popLayout">
