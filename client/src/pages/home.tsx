@@ -5,6 +5,7 @@ import CategoryFilter from "@/components/category-filter";
 import PortfolioGallery from "@/components/portfolio-gallery";
 import AboutSection from "@/components/about-section";
 import ContactSection from "@/components/contact-section";
+import SocialMediaSection from "@/components/social-media-section";
 import Lightbox from "@/components/lightbox";
 
 export default function Home() {
@@ -53,6 +54,7 @@ export default function Home() {
       />
       <AboutSection />
       <ContactSection />
+      <SocialMediaSection />
       <Lightbox 
         isOpen={lightboxOpen}
         projectId={lightboxProject.projectId}
