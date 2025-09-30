@@ -74,4 +74,5 @@ The application is configured for serverless deployment on Netlify with the foll
 - The project uses a custom esbuild script (`scripts/build-functions.mjs`) to build Netlify functions
 - This script uses `esbuild-plugin-alias` to resolve TypeScript path aliases (`@shared`) during the build
 - The build script is configured in `package.json` under `build:functions`
+- The Netlify build command uses `npm ci --include=dev` to ensure devDependencies (vite, esbuild, etc.) are installed during build
 - This ensures the Netlify serverless functions can properly bundle and resolve all dependencies

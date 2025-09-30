@@ -13,15 +13,12 @@
 # - Ensure auth tokens are validated on each request
 
 [build]
-  command = "npm ci && npm run build:frontend && npm run build:functions"
+  command = "npm ci --include=dev && npm run build:frontend && npm run build:functions"
   publish = "dist/public"
   functions = "netlify/functions"
 
 [build.environment]
   NODE_VERSION = "20"
-
-[context.production.environment]
-  NODE_ENV = "production"
 
 [[redirects]]
   from = "/api/*"
