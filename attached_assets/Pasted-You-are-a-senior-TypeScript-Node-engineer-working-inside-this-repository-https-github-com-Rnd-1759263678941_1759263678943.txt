@@ -1,0 +1,188 @@
+You are a senior TypeScript/Node engineer working inside **this repository**: https://github.com/Rndynt/PortofolioPhotograph. Build an **admin dashboard (no login yet)** plus the minimal backend needed to manage a photography portfolio business. The landing site will show packages/pricing and a gallery; users can place an order with **down payment via Midtrans Snap**. The dashboard manages all content and orders.
+
+STRICT SCOPE & CONSTRAINTS
+- Work in this repo only; keep the current mono-structure (client, server, shared, netlify/functions).
+- Use **TypeScript everywhere**, Drizzle ORM, and keep existing toolchain (Vite + Tailwind + shadcn/ui is already configured).
+- Do not introduce a second frontend or a second API framework. Use **Netlify Functions** under `netlify/functions` for APIs.
+- **No auth for now**. Dashboard is open while we develop.
+- Make the work incremental, commit frequently with clear messages.
+
+HIGH-LEVEL FEATURES (Acceptance Criteria)
+1) Gallery (Project-based)
+   - A Project has: title, slug, category (optional), happenedAt (date), clientName (optional), mainImageUrl (main/thumbnail), images (up to 7 extra), isPublished, driveLink (Google Drive result link, optional).
+   - Dashboard can: create/read/update/delete projects, upload/select a **main image**, upload/manage up to **7 images** per project (enforce max in UI), set publish toggle, set/preview driveLink.
+   - Landing shows a gallery grid of **published** projects. Each card uses mainImageUrl as thumbnail. Clicking opens a simple project detail page with the 7 images.
+
+2) Pricing (Category-based packages)
+   - A Category has: name, slug, description, basePrice (IDR), isActive, sortOrder.
+   - Optional: PriceTier per category (name, price, description, sortOrder, isActive).
+   - Dashboard can CRUD categories and tiers; landing shows active categories & tiers as **Packages**.
+
+3) Orders + Down Payment (Midtrans Snap)
+   - Public Order form on landing: select Category (+ optional Tier), fill customerName, email, phone, notes.
+   - Backend computes totalPrice = tier.price if chosen, else category.basePrice; dpPercent default 30%; dpAmount = round(totalPrice*dpPercent/100).
+   - Backend creates an Order record (status=PENDING), then creates a **Midtrans Snap transaction** for dpAmount.
+   - Frontend opens Snap popup using returned token/redirect_url.
+   - Implement a **webhook** endpoint to receive Midtrans notifications; verify signature_key; persist Payment record and update Order.paymentStatus.
+   - **Order Status Pipeline** (managed in dashboard Kanban): 
+       PENDING → CONSULTATION → SESSION → FINISHING → DRIVE_LINK → DONE (also allow CANCELLED).
+     After webhook settlement for DP, auto-move PENDING → CONSULTATION (configurable).
+   - Dashboard Orders view: Kanban by status with drag-and-drop, detail drawer (customer info, selected package, payment timeline, status actions).
+
+4) Surfacing on Landing
+   - Gallery grid (published projects only) and Packages must render from the API/DB.
+   - Public Order flow integrates Snap and shows success/failed states (also reflect later updates via webhook).
+
+DATA MODEL (Drizzle)
+Create these tables in `server/db` (or wherever you keep schema) using Drizzle. Use SQLite in dev (via better-sqlite3) and keep room to switch to Postgres later.
+- categories: id (cuid), name (unique), slug (unique), description?, basePrice int, isActive bool, sortOrder int, createdAt, updatedAt
+- price_tiers: id, categoryId (FK), name, price int, description?, isActive bool, sortOrder int
+- projects: id, title, slug (unique), categoryId?, clientName?, happenedAt datetime?, mainImageUrl, isPublished bool, driveLink?, createdAt, updatedAt
+- project_images: id, projectId (FK), url, caption?, sortOrder int
+- orders: id, categoryId (FK), priceTierId?, customerName, email, phone, notes?, status enum (PENDING, CONSULTATION, SESSION, FINISHING, DRIVE_LINK, DONE, CANCELLED), totalPrice int, dpPercent int default 30, dpAmount int, midtransOrderId?, snapToken?, snapRedirectUrl?, paymentStatus?, createdAt, updatedAt
+- payments: id, orderId (FK), provider default "midtrans", type default "DOWN_PAYMENT", status (pending/settlement/deny/expire/cancel), grossAmount int, paidAt datetime?, rawNotifJson JSON?, createdAt
+Add drizzle-kit config & migrations; add a `scripts/seed.ts` to create 2-3 demo categories/tiers and 1-2 demo projects.
+
+SHARED TYPES & VALIDATION
+- In `shared/`, add Zod schemas + TS types for: Category, PriceTier, Project, ProjectImage, Order, Payment, and the enums. Export for both client & server.
+- Validate all API inputs with Zod; return typed errors.
+
+BACKEND (Netlify Functions)
+Create these functions under `netlify/functions` (one file per resource, simple REST). Return JSON, handle CORS for local dev.
+
+1. categories.ts
+   - GET /api/categories (list active/all by query), GET /api/categories/:id, POST (create), PATCH/:id (update), DELETE/:id.
+2. tiers.ts
+   - GET /api/categories/:categoryId/tiers, POST (create), PATCH/:id, DELETE/:id.
+3. projects.ts
+   - GET /api/projects (filters: published, category, search), GET /api/projects/:id|slug
+   - POST (create), PATCH/:id (update fields incl. isPublished & driveLink), DELETE/:id.
+   - POST /api/projects/:id/images (add image URL), PATCH /api/project-images/:imageId, DELETE /api/project-images/:imageId.
+4. orders.ts
+   - POST /api/orders (create order & create Midtrans Snap txn for dpAmount)
+     Steps:
+       * compute totalPrice & dpAmount server-side
+       * create Order row
+       * call midtrans-nodejs-client (Snap) to create token with order_id = "order_" + order.id (or similar), gross_amount = dpAmount, customer_details, item_details (include "Down Payment for <Category/Tier>")
+       * persist snapToken + redirect_url + midtransOrderId to the order and return them
+   - GET /api/orders (filter by status), GET /api/orders/:id, PATCH /api/orders/:id (update status/notes), GET /api/orders/:id/payments
+5. midtransWebhook.ts
+   - POST /api/midtrans/webhook
+     Steps:
+       * parse body
+       * verify signature_key using server key (ignore if invalid)
+       * upsert Payment row with raw payload
+       * update order.paymentStatus = transaction_status and if settlement for DP → optionally bump status PENDING→CONSULTATION
+       * respond 200 OK as per Midtrans requirement
+6. uploads.ts (optional)
+   - For now, prefer **URL-based images** (e.g., Cloudinary). If local dev upload is required, add a dev-only file receiver (multer/busboy) that writes into `client/public/uploads` with random filenames; return URL "/uploads/…". Do not rely on local disk in production on Netlify.
+
+NOTE: Add `netlify.toml` redirects so `/api/*` map to the functions. Example:
+[[redirects]]
+  from = "/api/*"
+  to = "/.netlify/functions/:splat"
+  status = 200
+
+FRONTEND (client)
+General:
+- Keep **Vite + React + TypeScript**. Use **react-router-dom** with routes:
+  / (landing)
+  /project/:slug (public project detail)
+  /order (public order form)
+  /dashboard (admin home)
+  /dashboard/projects
+  /dashboard/projects/new
+  /dashboard/projects/:id
+  /dashboard/pricing
+  /dashboard/orders
+- Use **shadcn/ui** (already configured via components.json) for UI: Button, Card, Input, Select, Dialog/Drawer, Tabs, Table, Badge, Tooltip.
+- Use **TanStack Query** for data fetching/mutations; keep a small API client wrapper (`client/src/lib/api.ts`) pointing to /api/*.
+
+Landing:
+- Home shows two sections:
+  (A) Gallery: grid of published Projects (mainImageUrl, title, category name). Click → /project/:slug with the extra 7 images (in sortOrder).
+  (B) Packages: list active Categories with optional Tiers. Each card has “Book now” → /order prefilled with the chosen Category/Tier.
+- Order flow:
+  (1) user fills form → POST /api/orders
+  (2) on response with snapToken (or redirect_url), load Snap JS and open popup
+  (3) show result page (success/pending/failed). Webhook will finalize/order timeline in dashboard.
+
+Dashboard:
+- Sidebar: Projects, Orders, Pricing.
+- Projects List: table with search/sort by date/category/published. Row actions: Edit, Publish toggle, Delete.
+- Project Editor:
+  fields: title, slug (auto from title), category select, date, clientName, mainImageUrl (paste URL or upload dev-only), image manager (add/remove up to 7, show count), isPublished toggle, driveLink (Google Drive URL).
+  show a live preview card of how it appears on landing.
+- Pricing:
+  Categories table with inline edit (name, basePrice, active, sort order). Drill-in to manage Tiers.
+- Orders:
+  Kanban board columns: PENDING, CONSULTATION, SESSION, FINISHING, DRIVE_LINK, DONE, CANCELLED.
+  Drag card between columns (PATCH order.status). Clicking a card opens a detail drawer:
+    - customerName, email (mailto), phone (tel link), notes
+    - chosen Category/Tier and pricing breakdown with dpAmount
+    - payment events (list of Payments with status and timestamps)
+    - quick actions: Copy invoice/order link, Move to next stage, Set driveLink (if FINISHING → DRIVE_LINK).
+
+ENV & CONFIG
+Create `.env` with:
+- MIDTRANS_IS_PRODUCTION=false
+- MIDTRANS_SERVER_KEY=SB-Mid-server-xxxx
+- MIDTRANS_CLIENT_KEY=SB-Mid-client-xxxx
+- APP_BASE_URL=http://localhost:8888  (Netlify dev) or http://localhost:5173 + proxy; use the same base in client when calling /api
+- Optional for uploads: CLOUDINARY_CLOUD_NAME, CLOUDINARY_UPLOAD_PRESET (if you pick Cloudinary)
+- DRIZZLE_DB_URL (if you use file path, not needed; otherwise e.g., sqlite file path)
+Ensure the client includes Snap JS when needed and uses MIDTRANS_CLIENT_KEY from env (inject via Vite define).
+
+IMPLEMENTATION CHECKLIST (Do in order)
+1) Repo scan & dependency audit; add: drizzle-orm, better-sqlite3, drizzle-kit; midtrans-client; zod; tanstack/react-query; react-router-dom; dayjs; sortablejs/dnd-kit for Kanban; class-variance-authority if needed by shadcn.
+2) Drizzle setup:
+   - Add schema files with tables above.
+   - Generate migrations; run migrations on dev start.
+   - Add a tiny DB helper (singleton connection).
+3) Shared Zod & types in `shared/`.
+4) API routes in Netlify Functions:
+   - categories.ts, tiers.ts, projects.ts, orders.ts, midtransWebhook.ts (+ optional uploads.ts)
+   - Add helpers: parseJSON, zodValidate, error responses, CORS wrapper.
+   - Add `netlify.toml` redirect for /api/*.
+5) Midtrans integration:
+   - On order creation: create Snap transaction with dpAmount; persist snapToken/redirect_url & midtransOrderId.
+   - Webhook: verify signature_key; persist Payment; update Order.paymentStatus; status auto-bump PENDING→CONSULTATION on settlement (config flag).
+6) Client landing:
+   - Build gallery grid, project detail page.
+   - Build packages section.
+   - Build order form → call /api/orders → open Snap.
+7) Client dashboard:
+   - Layout + sidebar.
+   - Projects list + editor with image manager (enforce ≤7 images; show remaining count).
+   - Pricing manager (categories + tiers).
+   - Orders Kanban + detail drawer with status controls.
+8) Seed script for quick demo data (2 categories, tiers, 1-2 projects).
+9) QA / E2E:
+   - Create a category & tier; create a project; publish → confirm appears on landing.
+   - Place an order in sandbox; pay; confirm webhook updates Payments and Order status.
+   - Move order through all stages; set driveLink; confirm visible on order detail + project (if applicable).
+10) README update:
+   - Dev commands (netlify dev, vite dev), env setup, how to run migrations, how to test Midtrans sandbox.
+
+NON-FUNCTIONAL
+- Clean, accessible UI (shadcn). Form validation (Zod). Graceful empty/loading/error states. Toasts on success/error.
+- Types are strict (no any). No dead code. Lint passes.
+- Avoid writing files in production. Keep upload-local strictly dev-only with clear TODO.
+
+TESTING
+- Unit test the utility that computes dpAmount and validates order inputs.
+- Integration test a happy-path order creation (mock Midtrans client) and webhook handler (signature verified, order updated).
+
+DELIVERABLES
+- Working dashboard & landing features above.
+- Drizzle schema + migrations + seed.
+- Netlify functions for all endpoints + webhook.
+- Updated README with instructions and envs.
+- Short Loom-like summary in a markdown file `FEATURES_OVERVIEW.md` describing architecture, endpoints, and how to extend.
+
+GUARDRAILS
+- Do not break existing styling; extend thoughtfully.
+- Keep API surface minimal & documented.
+- All magic numbers (like dpPercent) configurable via a simple settings table or constants file.
+
+Start now. If anything in the existing code conflicts with these requirements, refactor minimally and note decisions in commit messages and FEATURES_OVERVIEW.md.
