@@ -15,6 +15,7 @@ import {
   type InsertPortfolioImage,
   type ContactSubmission,
   type InsertContactSubmission,
+  type PaymentStatus,
   categories,
   priceTiers,
   projects,
@@ -62,11 +63,19 @@ export interface IStorage {
   getOrderById(id: string): Promise<Order | undefined>;
   createOrder(order: InsertOrder): Promise<Order>;
   updateOrder(id: string, order: Partial<InsertOrder>): Promise<Order | undefined>;
+  deleteOrder(id: string): Promise<void>;
 
   // Payments
   getPaymentsByOrder(orderId: string): Promise<Payment[]>;
+  getPaymentByTransaction(orderId: string, transactionId: string): Promise<Payment | null>;
   createPayment(payment: InsertPayment): Promise<Payment>;
   updatePayment(id: string, payment: Partial<InsertPayment>): Promise<Payment | undefined>;
+  upsertPayment(orderId: string, transactionId: string, paymentData: {
+    status: PaymentStatus;
+    grossAmount: number;
+    paidAt?: Date;
+    rawNotifJson: any;
+  }): Promise<Payment>;
 
   // Portfolio (backward compatibility)
   getPortfolioImages(): Promise<PortfolioImage[]>;
@@ -267,6 +276,10 @@ export class DatabaseStorage implements IStorage {
     return order || undefined;
   }
 
+  async deleteOrder(id: string): Promise<void> {
+    await db.delete(orders).where(eq(orders.id, id));
+  }
+
   // Payments
   async getPaymentsByOrder(orderId: string): Promise<Payment[]> {
     return await db.select().from(payments).where(eq(payments.orderId, orderId));
@@ -287,6 +300,50 @@ export class DatabaseStorage implements IStorage {
       .where(eq(payments.id, id))
       .returning();
     return payment || undefined;
+  }
+
+  async getPaymentByTransaction(orderId: string, transactionId: string): Promise<Payment | null> {
+    const [payment] = await db
+      .select()
+      .from(payments)
+      .where(and(eq(payments.orderId, orderId), eq(payments.transactionId, transactionId)));
+    return payment || null;
+  }
+
+  async upsertPayment(orderId: string, transactionId: string, paymentData: {
+    status: PaymentStatus;
+    grossAmount: number;
+    paidAt?: Date;
+    rawNotifJson: any;
+  }): Promise<Payment> {
+    const existingPayment = await this.getPaymentByTransaction(orderId, transactionId);
+
+    if (existingPayment) {
+      const [payment] = await db
+        .update(payments)
+        .set({
+          status: paymentData.status,
+          grossAmount: paymentData.grossAmount,
+          paidAt: paymentData.paidAt,
+          rawNotifJson: paymentData.rawNotifJson,
+        })
+        .where(eq(payments.id, existingPayment.id))
+        .returning();
+      return payment;
+    } else {
+      const [payment] = await db
+        .insert(payments)
+        .values({
+          orderId,
+          transactionId,
+          status: paymentData.status,
+          grossAmount: paymentData.grossAmount,
+          paidAt: paymentData.paidAt,
+          rawNotifJson: paymentData.rawNotifJson,
+        })
+        .returning();
+      return payment;
+    }
   }
 
   // Portfolio (backward compatibility)

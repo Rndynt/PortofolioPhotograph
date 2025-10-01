@@ -1,6 +1,7 @@
 import type { Express } from "express";
 import { createServer, type Server } from "http";
 import { storage } from "./storage";
+import { db } from "./db";
 import {
   insertContactSubmissionSchema,
   insertPortfolioImageSchema,
@@ -9,10 +10,37 @@ import {
   insertProjectSchema,
   insertProjectImageSchema,
   insertOrderSchema,
+  projectImages,
 } from "@shared/schema";
 import { z } from "zod";
-import { computeDpAmount, generateOrderId } from "./midtrans/helpers";
+import { eq, sql } from "drizzle-orm";
+import { computeDpAmount, generateOrderId, verifySignature } from "./midtrans/helpers";
 import { createSnapTransaction } from "./midtrans/client";
+
+const createOrderSchema = z.object({
+  categoryId: z.string().min(1),
+  priceTierId: z.string().optional(),
+  customerName: z.string().min(1),
+  email: z.string().email(),
+  phone: z.string().min(1),
+  notes: z.string().optional(),
+});
+
+const updateOrderSchema = z.object({
+  status: z.enum(["PENDING", "CONSULTATION", "SESSION", "FINISHING", "DRIVE_LINK", "DONE", "CANCELLED"]).optional(),
+  notes: z.string().optional(),
+  driveLink: z.string().optional(),
+});
+
+function hashCode(str: string): number {
+  let hash = 0;
+  for (let i = 0; i < str.length; i++) {
+    const char = str.charCodeAt(i);
+    hash = ((hash << 5) - hash) + char;
+    hash = hash & hash;
+  }
+  return hash;
+}
 
 export async function registerRoutes(app: Express): Promise<Server> {
   // Categories routes
@@ -225,14 +253,40 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.post("/api/projects/:projectId/images", async (req, res) => {
     try {
       const { projectId } = req.params;
+      
       const validatedData = insertProjectImageSchema.parse({
         ...req.body,
         projectId,
       });
-      const image = await storage.createProjectImage(validatedData);
+      
+      const image = await db.transaction(async (tx) => {
+        const lockKey = Math.abs(hashCode(projectId));
+        await tx.execute(sql`SELECT pg_advisory_xact_lock(${lockKey})`);
+        
+        const existingImages = await tx.select().from(projectImages)
+          .where(eq(projectImages.projectId, projectId));
+        
+        if (existingImages.length >= 7) {
+          throw new Error("Cannot add more than 7 images per project");
+        }
+        
+        const [newImage] = await tx
+          .insert(projectImages)
+          .values(validatedData)
+          .returning();
+        
+        return newImage;
+      });
+      
       res.status(201).json(image);
     } catch (error) {
-      res.status(400).json({ message: "Invalid project image data" });
+      if (error instanceof Error && error.message === "Cannot add more than 7 images per project") {
+        return res.status(400).json({ message: error.message });
+      }
+      if (error instanceof z.ZodError) {
+        return res.status(400).json({ message: "Invalid project image data", errors: error.errors });
+      }
+      res.status(500).json({ message: "Failed to create project image" });
     }
   });
 
@@ -294,10 +348,116 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  app.post("/api/orders", async (req, res) => {
+    try {
+      // Environment variable guards
+      if (!process.env.MIDTRANS_SERVER_KEY || !process.env.MIDTRANS_CLIENT_KEY) {
+        return res.status(500).json({ message: "Payment system not configured" });
+      }
+
+      // Validate request body
+      const validatedData = createOrderSchema.parse(req.body);
+      const { categoryId, priceTierId, customerName, email, phone, notes } = validatedData;
+      
+      let totalPrice: number;
+      let itemName: string;
+      
+      // Validate tier belongs to category if tier is provided
+      if (priceTierId) {
+        const tier = await storage.getTierById(priceTierId);
+        if (!tier) {
+          return res.status(400).json({ message: "Price tier not found" });
+        }
+        
+        // Data integrity check: validate tier belongs to category
+        if (tier.categoryId !== categoryId) {
+          return res.status(400).json({ message: "Price tier does not belong to the specified category" });
+        }
+        
+        totalPrice = tier.price;
+        itemName = tier.name;
+      } else {
+        const category = await storage.getCategoryById(categoryId);
+        if (!category) {
+          return res.status(400).json({ message: "Category not found" });
+        }
+        totalPrice = category.basePrice;
+        itemName = category.name;
+      }
+      
+      const dpAmount = computeDpAmount(totalPrice, 30);
+      
+      // Create order first
+      const order = await storage.createOrder({
+        categoryId,
+        priceTierId: priceTierId || null,
+        customerName,
+        email,
+        phone,
+        notes: notes || null,
+        status: "PENDING",
+        totalPrice,
+        dpPercent: 30,
+        dpAmount,
+      });
+      
+      const midtransOrderId = generateOrderId(order.id);
+      
+      // Try to create Snap transaction, delete order if it fails
+      let snapTransaction;
+      try {
+        snapTransaction = await createSnapTransaction({
+          transaction_details: {
+            order_id: midtransOrderId,
+            gross_amount: dpAmount,
+          },
+          customer_details: {
+            first_name: customerName,
+            email,
+            phone,
+          },
+          item_details: [
+            {
+              id: "dp",
+              name: `Down Payment for ${itemName}`,
+              price: dpAmount,
+              quantity: 1,
+            },
+          ],
+        });
+      } catch (midtransError) {
+        // Delete orphaned order if Midtrans fails
+        await storage.deleteOrder(order.id);
+        console.error("Midtrans transaction creation failed:", midtransError);
+        return res.status(500).json({ message: "Payment system error: Failed to create payment transaction" });
+      }
+      
+      // Update order with Midtrans data
+      await storage.updateOrder(order.id, {
+        midtransOrderId,
+        snapToken: snapTransaction.token,
+        snapRedirectUrl: snapTransaction.redirect_url,
+      });
+      
+      res.status(201).json({
+        orderId: order.id,
+        snapToken: snapTransaction.token,
+        redirect_url: snapTransaction.redirect_url,
+      });
+    } catch (error) {
+      // Handle validation errors (400) vs server errors (500)
+      if (error instanceof z.ZodError) {
+        return res.status(400).json({ message: "Invalid order data", errors: error.errors });
+      }
+      console.error("Order creation error:", error);
+      res.status(500).json({ message: "Failed to create order" });
+    }
+  });
+
   app.patch("/api/orders/:id", async (req, res) => {
     try {
       const { id } = req.params;
-      const validatedData = insertOrderSchema.partial().parse(req.body);
+      const validatedData = updateOrderSchema.parse(req.body);
       const order = await storage.updateOrder(id, validatedData);
       
       if (!order) {
@@ -317,6 +477,70 @@ export async function registerRoutes(app: Express): Promise<Server> {
       res.json(payments);
     } catch (error) {
       res.status(500).json({ message: "Failed to fetch payments" });
+    }
+  });
+
+  app.post("/api/midtrans/webhook", async (req, res) => {
+    try {
+      const {
+        order_id,
+        status_code,
+        gross_amount,
+        signature_key,
+        transaction_id,
+        transaction_status,
+      } = req.body;
+
+      const serverKey = process.env.MIDTRANS_SERVER_KEY;
+      if (!serverKey) {
+        console.error("MIDTRANS_SERVER_KEY not configured");
+        return res.status(500).json({ message: "Server configuration error" });
+      }
+
+      const isValid = verifySignature(
+        order_id,
+        status_code,
+        gross_amount,
+        serverKey,
+        signature_key
+      );
+
+      if (!isValid) {
+        console.error("Invalid signature for webhook");
+        return res.status(401).json({ message: "Unauthorized" });
+      }
+
+      const orderId = order_id.replace("order_", "");
+      
+      const order = await storage.getOrderById(orderId);
+      if (!order) {
+        console.error(`Order not found: ${orderId}`);
+        return res.status(200).json({ message: "OK" });
+      }
+
+      const paidAt = transaction_status === "settlement" ? new Date() : undefined;
+      
+      await storage.upsertPayment(orderId, transaction_id, {
+        status: transaction_status,
+        grossAmount: parseInt(gross_amount),
+        paidAt,
+        rawNotifJson: req.body,
+      });
+
+      const updateData: any = {
+        paymentStatus: transaction_status,
+      };
+
+      if (transaction_status === "settlement" && order.status === "PENDING") {
+        updateData.status = "CONSULTATION";
+      }
+
+      await storage.updateOrder(orderId, updateData);
+
+      res.status(200).json({ message: "OK" });
+    } catch (error) {
+      console.error("Webhook processing error:", error);
+      res.status(200).json({ message: "OK" });
     }
   });
 

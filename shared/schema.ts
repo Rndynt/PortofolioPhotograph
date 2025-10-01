@@ -107,6 +107,7 @@ export type PaymentType = typeof PaymentType[keyof typeof PaymentType];
 export const payments = pgTable("payments", {
   id: text("id").primaryKey().$defaultFn(() => cuid()),
   orderId: text("order_id").notNull().references(() => orders.id),
+  transactionId: text("transaction_id").unique(),
   provider: text("provider").notNull().default("midtrans"),
   type: paymentTypeEnum("type").notNull().default("DOWN_PAYMENT"),
   status: paymentStatusEnum("status").notNull(),
