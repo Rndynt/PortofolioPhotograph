@@ -1,0 +1,133 @@
+You are a senior TypeScript/Node engineer working **inside this repository**: https://github.com/Rndynt/PortofolioPhotograph.
+
+CONTEXT (Phase 2 is DONE — do not re-implement)
+- PostgreSQL + Drizzle schema & seeds exist (categories, price_tiers, projects, project_images, orders, payments).
+- Backend endpoints exist and are tested (Categories, Price Tiers, Projects (+images), Orders (+payments)).
+- Payments:
+  - `POST /api/orders` creates orders and **Midtrans Snap** token (30% DP), validates tier/category, cleans up on failure.
+  - `POST /api/midtrans/webhook` verifies **SHA512 signature**, is **idempotent**, auto-advances `PENDING → CONSULTATION` on settlement, returns 200 OK.
+- Server already enforces **≤ 7** project images and **whitelists** order updates (`status`, `notes`, `driveLink` only).
+
+➡️ Treat this backend as the single source of truth. **No duplication**: if any parallel code exists, consolidate and remove duplicates. Proceed to verify UI scope below, implement missing pieces, and wire to the existing APIs.
+
+------------------------------------------------------------------------------------------------------------------------
+OBJECTIVE (This iteration = Phase 3 UI & wiring)
+1) **Verify** what’s already implemented vs. missing for the UI tasks below.
+2) **Implement** any missing items **in a structured, non-duplicative way**, keeping types, validation, and data flows clean.
+3) **Report** findings and results in repo docs so progress is auditable.
+
+------------------------------------------------------------------------------------------------------------------------
+AUDIT FIRST (no code yet)
+Create/Update **`IMPLEMENTATION_PLAN.md`** at repo root with:
+- **Status board**: “Done / In Progress / Next”.
+- A **duplication log** (if any duplicate routes/validators/types/UI states are found, list the file paths and the exact consolidation action).
+- The **task list** below with checkboxes, each annotated with **[Implemented] / [Missing] / [Needs Fix]** and the file(s) that satisfy it.
+
+Also confirm:
+- `netlify.toml` has the `/api/*` redirect to `/.netlify/functions/:splat`.
+- `/dashboard-admin` is **NOT** linked from any public header/nav/sitemap.
+
+------------------------------------------------------------------------------------------------------------------------
+TASK LIST TO VERIFY & IMPLEMENT (map 1:1 to UI)
+(These come from the screenshot + spec. Mark each in `IMPLEMENTATION_PLAN.md` and implement if missing.)
+
+HOME (public `/`) — update to **dynamic** from DB (page already exists; do not recreate)
+- [ ] **Show project details on home page**  
+  Render a **published projects** grid: `title`, `mainImageUrl` (thumbnail), optional `category name` and `happenedAt`. Clicking a card navigates to `/project/:slug`.
+- [ ] **Show package prices on home page**  
+  Render **active categories** with their **price tiers** (if any). Each card/button routes to `/order?category=<id>&tier=<id?>`.
+
+PROJECT DETAIL (public)
+- [ ] **Create page for project with images**  
+  Route: `/project/:slug` showing `title`, `mainImageUrl`, and up to **7 images** in order. Include basic metadata (category, date, clientName if present). Handle 404.
+
+ORDER FLOW (public)
+- [ ] **Create order form and payment page**  
+  Route: `/order`. Form: `{ categoryId, optional priceTierId, customerName, email, phone, notes }` (client-side Zod). On submit:
+  1) `POST /api/orders`
+  2) Receive `{ orderId, snapToken, redirect_url }`
+  3) Load Snap JS with `data-client-key = import.meta.env.VITE_MIDTRANS_CLIENT_KEY` and open popup
+  4) Show success/pending/error state; the final state is driven by webhook (poll/refetch order for user feedback).
+
+ADMIN (private path, **no nav link**)
+- [ ] **Create admin dashboard without navigation exposure**  
+  Route: `/dashboard-admin` (not linked in header/nav).
+- [ ] **Build admin tool for project management**  
+  Projects list with search/filter (category/published), CRUD form (title, slug auto+editable, category, date, clientName, **mainImageUrl**, image manager **(enforce ≤ 7 in UI)**, isPublished, driveLink). Show live preview card.
+- [ ] **Build admin tool for pricing management**  
+  Categories table (name, basePrice IDR format, isActive, sortOrder) + drill-in to manage Tiers (name, price, description, isActive, sortOrder).
+- [ ] **Build admin order tracking board**  
+  Kanban columns: `PENDING`, `CONSULTATION`, `SESSION`, `FINISHING`, `DRIVE_LINK`, `DONE`, `CANCELLED`. Drag to update `status` via `PATCH /api/orders/:id`. Detail drawer shows customer info, chosen package/tier, DP breakdown, **payment timeline** (`/api/orders/:id/payments`), quick actions (copy links, next stage, set driveLink).
+
+DOCS & QA
+- [ ] Update `FEATURES_OVERVIEW.md` with the UI routes, data flows, and how the UI consumes the backend.
+- [ ] Update `README.md` with env usage on the **client** (`VITE_MIDTRANS_CLIENT_KEY`), local/dev instructions, and E2E test steps.
+- [ ] Add `UI_QA_CHECKLIST.md` with manual steps (listed below).
+
+------------------------------------------------------------------------------------------------------------------------
+IMPLEMENTATION DETAILS (how to build missing pieces)
+
+Client architecture
+- Keep **Vite + React + TS + Tailwind + shadcn/ui**.
+- Use **react-router-dom** routes: `/`, `/project/:slug`, `/order`, `/dashboard-admin`.
+- Use **TanStack Query**; create `client/src/lib/api.ts` as a tiny fetch wrapper to `/api/*` with typed responses.
+- Reuse server’s TS types by exporting **shared Zod schemas/types** (no drift). Build client form types from Zod `infer`.
+
+Home `/`
+- `useQuery` projects endpoint with `published=true`. Render a responsive card grid; card → `/project/:slug`.
+- `useQuery` categories endpoint with `active=true` + nested tiers. Render price cards; “Book now” links to `/order?category=..&tier=..`.
+
+Project detail
+- `useQuery` project by `slug`. Grid the extra images (max 7). Handle loading/empty/404 with shadcn alerts.
+
+Order `/order`
+- Parse incoming `category` / `tier` query params for pre-selects.
+- Client-side Zod validation on submit.
+- Call `/api/orders`; upon success, load Snap script:  
+  `https://app.sandbox.midtrans.com/snap/snap.js` with `data-client-key={import.meta.env.VITE_MIDTRANS_CLIENT_KEY}`  
+  Use `window.snap.pay(token, { onSuccess, onPending, onError, onClose })`.
+- Show result page with the returned `orderId`; optionally poll `/api/orders/:id` for status until webhook settles.
+
+Admin `/dashboard-admin` (NO link in header/nav)
+- **Layout** with sidebar tabs: Projects / Pricing / Orders. Use shadcn components, toasts, Dialog/Drawer for forms.
+- **Projects**:  
+  - List/table (TanStack Table optional) + filters.  
+  - Edit/create form; image manager UI: show remaining slots **(7 - current)**; block add if reaching 7.
+  - Publish toggle; Delete with confirm dialog.
+- **Pricing**:  
+  - Categories table with inline edit or modal; tiers CRUD in nested UI.  
+  - IDR formatting helper for display.
+- **Orders**:  
+  - Kanban using dnd-kit/Sortable. Drag → `PATCH /api/orders/:id` with `{ status }`.  
+  - Detail drawer: mailto/tel links, package summary, **payment timeline** (map over `payments`), next-stage, set driveLink at `DRIVE_LINK`.
+
+Quality & states
+- Strict TS (no `any`), error boundaries, skeleton/loaders, empty states, a11y attributes on dialogs and lists.
+- **Do not** allow client mutation of totals/payment fields.
+- Ensure **one** API entry and **one** shared schema module (no duplicates).
+
+Env (client)
+- Add `VITE_MIDTRANS_CLIENT_KEY` to `.env` for client consumption. **Never** expose server key client-side.
+
+------------------------------------------------------------------------------------------------------------------------
+UI_QA_CHECKLIST.md (create/update and follow)
+1) Home shows dynamic **Projects** and **Packages** from DB (seed data visible).
+2) Click project → detail page shows up to **7** images.
+3) `/order` form creates order and opens Snap popup (sandbox keys).
+4) Simulate sandbox payment → webhook updates order/payment; admin Kanban shows movement to `CONSULTATION`.
+5) Admin Projects: create/publish; image manager blocks when attempting the 8th image.
+6) Admin Pricing: create category + tier; appears on home packages.
+7) Admin Orders: drag across all stages to `DONE`; set `driveLink` at `DRIVE_LINK` stage.
+8) Verify **no header/nav** link to `/dashboard-admin`.
+
+------------------------------------------------------------------------------------------------------------------------
+REPORTING (commit & docs)
+- Commit in small steps with clear messages (e.g., `feat(ui): dynamic home packages`, `feat(admin): orders kanban`).
+- Update `IMPLEMENTATION_PLAN.md` with **[Implemented] / [Missing] / [Needs Fix]** for each task and the exact file paths added/modified.
+- Update `FEATURES_OVERVIEW.md` and `README.md` with final UI flows and test instructions.
+
+Definition of Done for this iteration
+- `IMPLEMENTATION_PLAN.md` accurately reflects verification results and has all Phase 3 items checked or marked with clear next steps.
+- Home (`/`) uses dynamic data for projects & packages; `/project/:slug` works; `/order` opens Snap and reports state.
+- `/dashboard-admin` exists and is functional (Projects, Pricing, Orders Kanban + detail), and remains **unlinked** from any public navigation.
+- No duplicated schemas/routes/validators/UI modules; single `/api` entry retained.

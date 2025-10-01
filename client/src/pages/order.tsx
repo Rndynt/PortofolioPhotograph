@@ -4,6 +4,7 @@ import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import { apiRequest } from "@/lib/queryClient";
+import { formatIDR } from "@/lib/utils";
 import type { Category, PriceTier } from "@shared/schema";
 import Navigation from "@/components/navigation";
 import Footer from "@/components/footer";
@@ -28,14 +29,6 @@ const orderFormSchema = z.object({
 
 type OrderFormData = z.infer<typeof orderFormSchema>;
 
-const formatIDR = (amount: number) => {
-  return new Intl.NumberFormat('id-ID', {
-    style: 'currency',
-    currency: 'IDR',
-    minimumFractionDigits: 0,
-  }).format(amount);
-};
-
 declare global {
   interface Window {
     snap?: {
@@ -50,7 +43,11 @@ declare global {
 }
 
 export default function OrderPage() {
-  const [selectedCategoryId, setSelectedCategoryId] = useState<string>("");
+  const urlParams = new URLSearchParams(window.location.search);
+  const categoryFromUrl = urlParams.get('category') || "";
+  const tierFromUrl = urlParams.get('tier') || "";
+  
+  const [selectedCategoryId, setSelectedCategoryId] = useState<string>(categoryFromUrl);
   const [paymentStatus, setPaymentStatus] = useState<'idle' | 'success' | 'pending' | 'error'>('idle');
   const [snapLoaded, setSnapLoaded] = useState(false);
   const { toast } = useToast();
@@ -72,8 +69,8 @@ export default function OrderPage() {
   const form = useForm<OrderFormData>({
     resolver: zodResolver(orderFormSchema),
     defaultValues: {
-      categoryId: "",
-      priceTierId: "",
+      categoryId: categoryFromUrl,
+      priceTierId: tierFromUrl,
       customerName: "",
       email: "",
       phone: "",

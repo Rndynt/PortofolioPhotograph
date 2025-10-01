@@ -3,6 +3,7 @@ import Navigation from "@/components/navigation";
 import HeroSection from "@/components/hero-section";
 import CategoryFilter from "@/components/category-filter";
 import PortfolioGallery from "@/components/portfolio-gallery";
+import PricingSection from "@/components/pricing-section";
 import AboutSection from "@/components/about-section";
 import ContactSection from "@/components/contact-section";
 import SocialMediaSection from "@/components/social-media-section";
@@ -52,6 +53,7 @@ export default function Home() {
         selectedCategory={mappedCategory}
         onProjectClick={handleProjectClick} 
       />
+      <PricingSection />
       <AboutSection />
       <ContactSection />
       <SocialMediaSection />

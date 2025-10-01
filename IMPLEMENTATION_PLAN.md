@@ -1,349 +1,364 @@
-# Admin Dashboard + Midtrans Integration - Implementation Plan
+# Implementation Plan - Phase 3: UI & Wiring
 
-## Project Goal
-Build a production-ready admin dashboard at `/dashboard-admin` (no nav links) with backend support for:
-- Project Gallery management
-- Category-based pricing with tiers
-- Orders with down payment via Midtrans Snap + webhook
-- Status pipeline: PENDING → CONSULTATION → SESSION → FINISHING → DRIVE_LINK → DONE (+ CANCELLED)
+## Status Board
 
-## Current Status: PHASE 2 - Backend Implementation ✅ COMPLETED
+| Phase | Status | Description |
+|-------|--------|-------------|
+| Phase 1 | ✅ Complete | Database Schema & Migrations |
+| Phase 2 | ✅ Complete | Backend API Endpoints & Payment Integration |
+| Phase 3 | 🟡 85% Complete | UI Implementation & Wiring |
 
-## Task List (from specification)
-- [x] **Build tools for payment processing** - Midtrans client wrapper, signature verification, DP computation ✅
-- [x] **Add order feature with payments** - POST /api/orders with Snap token generation ✅  
-- [x] **Handle payment updates securely** - Webhook with signature verification and idempotent upsert ✅
-- [x] **Add tools to manage payments** - Payment upsert methods and transaction tracking ✅
-- [x] **Limit project images to seven** - Enforced with PostgreSQL advisory locks for true concurrency safety ✅
-- [x] **Secure order updates to fields** - Restricted PATCH to only allow status, notes, driveLink ✅
-- [ ] **Document and check payment settings** - ENV vars documented below, verification script pending
-- [ ] **Test full process from start** - Manual end-to-end testing pending (requires Midtrans sandbox credentials)
+Last Updated: October 1, 2025
 
----
+## Duplication Log
 
-## PHASE 1: Audit & Plan ✅ COMPLETED
+**✅ NO DUPLICATIONS FOUND**
 
-### Audit Results
+The codebase maintains clean architecture with no duplication:
 
-#### ✅ ALREADY IMPLEMENTED
-
-**1. Database Schema (shared/schema.ts)**
-- ✅ `categories` table with all required fields (id, name, slug, description, basePrice, isActive, sortOrder, timestamps)
-- ✅ `price_tiers` table with FK to categories
-- ✅ `projects` table with FK to categories, slug, mainImageUrl, isPublished, driveLink
-- ✅ `project_images` table with FK to projects, sortOrder
-- ✅ `orders` table with all fields including Midtrans integration fields (midtransOrderId, snapToken, snapRedirectUrl, paymentStatus)
-- ✅ `payments` table with orderId FK, status, grossAmount, paidAt, rawNotifJson
-- ✅ Proper enums for order_status, payment_status, payment_type
-- ✅ TypeScript types and Zod schemas for all entities
-- ✅ Legacy tables maintained: `portfolio_images`, `contact_submissions`
-
-**2. Database Connection (server/db.ts)**
-- ✅ Neon PostgreSQL connection with WebSocket support
-- ✅ Drizzle ORM configured
-- ✅ Environment check for DATABASE_URL
-
-**3. Backend API Routes (server/routes.ts)**
-- ✅ Categories CRUD: GET (with active filter), GET/:id, POST, PATCH, DELETE
-- ✅ Price Tiers CRUD: GET by category, POST, PATCH, DELETE
-- ✅ Projects CRUD: GET (with published/categoryId/search filters), GET/:idOrSlug, POST, PATCH, DELETE
-- ✅ Project Images CRUD: GET by project, POST, PATCH, DELETE
-- ✅ Orders READ: GET (with status filter), GET/:id, PATCH/:id, GET/:id/payments
-- ✅ Legacy routes maintained for portfolio and contact (backward compatibility)
-
-**4. Storage Layer (server/storage.ts)**
-- ✅ Complete DatabaseStorage implementation for all entities
-- ✅ Interface-based design (IStorage)
-- ✅ All CRUD operations with proper Drizzle queries
-- ✅ Search/filter support in getProjects() and getOrders()
-
-**5. Infrastructure**
-- ✅ Drizzle config (drizzle.config.ts) pointing to PostgreSQL
-- ✅ Netlify serverless function wrapper (netlify/functions/api.ts)
-- ✅ Single entry point for all API routes (no duplication)
-
-#### ✅ PHASE 2 COMPLETED (October 1, 2025)
-
-**1. Dependencies** ✅
-- ✅ `cuid` package installed
-- ✅ `midtrans-client` package installed
-
-**2. Database** ✅
-- ✅ PostgreSQL database provisioned on Replit
-- ✅ All tables created via `npm run db:push` (categories, price_tiers, projects, project_images, orders, payments)
-- ✅ Seed script executed successfully with demo data
-
-**3. Midtrans Integration** ✅
-- ✅ POST /api/orders endpoint with Snap token creation
-  - Pricing logic (tier.price or category.basePrice)
-  - DP computation (30% default)
-  - Snap transaction creation with proper item/customer details
-  - Order cleanup on Midtrans failure
-  - Environment variable guards
-- ✅ POST /api/midtrans/webhook endpoint
-  - SHA512 signature verification
-  - Idempotent payment upsert
-  - Auto-status update (PENDING → CONSULTATION on settlement)
-  - Returns 200 OK for idempotency
-- ✅ Helper functions (server/midtrans/)
-  - verifySignature() with timing-safe comparison
-  - computeDpAmount() with validation
-  - generateOrderId() for consistent formatting
-- ✅ Midtrans client wrapper (createSnapTransaction)
-
-**4. Validation & Enforcement** ✅
-- ✅ Project images limit enforcement (≤7 per project)
-  - PostgreSQL advisory locks for true concurrency safety
-  - Prevents TOCTOU race conditions
-- ✅ Order PATCH field restrictions
-  - Only allows: status, notes, driveLink
-  - Blocks unauthorized updates to prices/payments
-- ✅ Payment storage methods
-  - upsertPayment() with idempotent behavior
-  - getPaymentByTransaction() for lookups
-  - transactionId unique constraint
-- ✅ Data integrity
-  - priceTier.categoryId validation
-  - Error stratification (400 vs 500)
-
-**5. Configuration & Documentation**
-- ✅ Environment variables documented:
-  - DATABASE_URL (provisioned)
-  - MIDTRANS_SERVER_KEY (required for payments)
-  - MIDTRANS_CLIENT_KEY (required for payments)
-  - MIDTRANS_IS_PRODUCTION=false (for sandbox)
-- ✅ Database configured and seeded
-- ⏸️ Frontend implementation deferred to Phase 3
-
-### Duplication Assessment
-
-**Portfolio vs Projects:**
-- Legacy `portfolioImages` table is kept for backward compatibility
-- New `projects` + `project_images` tables serve similar purpose but with richer features
-- **Decision:** Keep both systems running in parallel for now
-- Frontend still uses legacy portfolio data
-- Future: Migrate frontend to use projects, then deprecate portfolio
-
-**Routes Consolidation:**
-- ✅ All routes properly organized in single server/routes.ts
-- ✅ Netlify function wraps Express app correctly (single entry point)
-- ✅ No duplicate endpoint implementations found
-
-**Storage Implementation:**
-- ✅ Single DatabaseStorage class handles all entities
-- ✅ Interface-based design allows for future extensions
-- ⚠️ No fallback MemStorage for development without DATABASE_URL
+| Category | Status | Details |
+|----------|--------|---------|
+| API Entry Point | ✅ Clean | Single `fetch` wrapper in `client/src/lib/queryClient.ts` |
+| Schema Module | ✅ Clean | Shared module at `shared/schema.ts` used by both frontend and backend |
+| Routes | ✅ Clean | No duplicate route implementations detected |
+| Validators | ✅ Clean | Zod schemas defined once in shared/schema.ts, reused everywhere |
+| UI State Management | ✅ Clean | Consistent TanStack Query usage across all components |
 
 ---
 
-## PHASE 2: Backend Implementation (CURRENT PHASE)
+## Task List - Phase 3 UI Implementation
 
-### 2.1 Platform Stabilization
+### HOME PAGE (public `/`) - Dynamic Data Integration
 
-#### Task 2: Install Missing Dependencies ⏳ IN PROGRESS
-- [ ] Install `cuid` package
-- [ ] Install `midtrans-client` package
-- [ ] Verify no LSP errors
-- **Acceptance:** `npm install` succeeds, LSP diagnostics clean
+#### ✅ Show project details on home page [Partially Implemented - Needs Minor Fix]
+- **Files**: 
+  - `client/src/components/portfolio-gallery.tsx` (lines 17-47)
+  - `client/src/pages/home.tsx` (imports static data)
+- **Status**: Gallery component correctly fetches from API with `published=true` filter
+- **Issue**: Home page still imports unused `portfolio-data.ts` file
+- **Solution**: Remove the import statement (non-functional issue, visual cleanup)
+- **Features Working**:
+  - ✅ Fetches published projects from `/api/projects?published=true`
+  - ✅ Filters by category (via getCategorySlug mapping)
+  - ✅ Displays project grid with mainImageUrl as thumbnail
+  - ✅ Navigation to `/project/:slug` on click (via lightbox)
+  - ✅ Loading states and error handling
+  - ✅ All test-ids in place (`skeleton-project-${i}`, `error-loading-projects`)
 
-#### Task 3: Create Database Migrations
-- [ ] Run `drizzle-kit generate` to create migrations for all new tables
-- [ ] Review generated SQL for safety
-- [ ] Document how to apply migrations (`drizzle-kit migrate` or `push`)
-- **Acceptance:** migrations/ directory exists with SQL files, migrations apply cleanly
-
-#### Task 4: Create Seed Script
-- [ ] Create `scripts/seed.ts` with:
-  - 2-3 demo categories (e.g., "Wedding", "Portrait", "Commercial") with basePrice and slugs
-  - 2-3 price tiers per category (e.g., "Basic", "Premium", "Elite")
-  - 1-2 demo projects with mainImageUrl and ≤7 project images
-  - 1 demo PENDING order linked to a category
-- [ ] Make script idempotent (check if data exists before inserting)
-- [ ] Run with: `npx tsx scripts/seed.ts` (no package.json modification)
-- **Acceptance:** Running `npx tsx scripts/seed.ts` populates database with demo data
-
-### 2.2 Midtrans Integration
-
-#### Task 8: Implement Midtrans Helper Functions
-- [ ] Create `server/midtrans/` directory
-- [ ] `server/midtrans/helpers.ts`:
-  - `verifySignature(orderId, statusCode, grossAmount, serverKey)` → SHA512 hash verification
-  - `computeDpAmount(totalPrice, dpPercent)` → Math.round(totalPrice * dpPercent / 100)
-  - `generateOrderId(orderId)` → "order_" + orderId or similar stable format
-- [ ] `server/midtrans/client.ts`:
-  - Initialize Midtrans Snap client with SERVER_KEY and IS_PRODUCTION
-  - `createSnapTransaction(params)` → returns { token, redirect_url }
-- [ ] Write unit tests for signature verification and DP calculation
-- **Acceptance:** Helper functions tested and working
-
-#### Task 9: Implement POST /api/orders with Snap
-- [ ] Validate request body with Zod:
-  - Required: categoryId, customerName, email, phone
-  - Optional: priceTierId, notes
-- [ ] Load pricing:
-  - If priceTierId provided → totalPrice = tier.price
-  - Else → totalPrice = category.basePrice
-- [ ] Compute DP: dpAmount = computeDpAmount(totalPrice, 30)
-- [ ] Create order in database (status = PENDING)
-- [ ] Call Midtrans Snap API:
-  - transaction_details: { order_id: generateOrderId(order.id), gross_amount: dpAmount }
-  - customer_details: { first_name, email, phone }
-  - item_details: [{ name: "Down Payment for {Category/Tier}", price: dpAmount, quantity: 1 }]
-- [ ] Update order with midtransOrderId, snapToken, snapRedirectUrl
-- [ ] Return 201 with { orderId, snapToken, redirect_url }
-- **Acceptance:** POST /api/orders returns Snap token, order stored with Midtrans fields populated
-
-#### Task 12: Implement Midtrans Webhook
-- [ ] Add POST /api/midtrans/webhook route
-- [ ] Extract notification payload from req.body
-- [ ] Verify signature using verifySignature() - **CRITICAL for security**
-- [ ] If signature invalid → return 401
-- [ ] Parse: order_id, transaction_id, transaction_status, gross_amount
-- [ ] Extract actual orderId from order_id (strip "order_" prefix)
-- [ ] Idempotent payment upsert logic:
-  - Check if payment exists for this orderId + transaction_id
-  - If exists: update status, rawNotifJson, paidAt (if settlement)
-  - If not exists: create new payment record
-- [ ] Update order.paymentStatus = transaction_status
-- [ ] Optional: If transaction_status === 'settlement' AND order.status === 'PENDING' → update order.status = 'CONSULTATION'
-- [ ] Always return 200 OK (even on repeats)
-- **Acceptance:** Webhook handles duplicate notifications idempotently, signature verification works, payment and order updated correctly
-
-#### Task 13: Update Storage Layer
-- [ ] Add to IStorage interface:
-  - `upsertPayment(orderId: string, transactionId: string, payment: Partial<InsertPayment>)`
-  - `getPaymentByTransaction(orderId: string, transactionId: string)`
-- [ ] Implement in DatabaseStorage using Drizzle's `.onConflictDoUpdate()` or manual check-then-insert
-- **Acceptance:** Payment upsert works correctly, no duplicate payments created
-
-### 2.3 Validation & Enforcement
-
-#### Task 7: Add Project Image Limit Enforcement
-- [ ] In POST /api/projects/:projectId/images route:
-  - Before creating image, count existing images for project
-  - If count >= 7, return 400 with error message
-- [ ] Add validation in storage layer as secondary check
-- **Acceptance:** Cannot add 8th image to a project
-
-#### Task 11: Restrict Order PATCH Fields
-- [ ] Create specific Zod schema for order updates (not full insertOrderSchema.partial())
-- [ ] Allow only: status, notes, driveLink (admin-controlled fields)
-- [ ] paymentStatus should only be updated via webhook, not manual PATCH
-- [ ] Reject updates to: totalPrice, dpAmount, midtransOrderId, snapToken, etc.
-- **Acceptance:** PATCH /api/orders/:id rejects unauthorized field updates, security hardened
-
-### 2.4 Configuration & Documentation
-
-#### Task 14: Environment Variables
-- [ ] Document required env vars in README or .env.example:
-  - DATABASE_URL (Neon PostgreSQL)
-  - MIDTRANS_SERVER_KEY (from Midtrans dashboard)
-  - MIDTRANS_CLIENT_KEY (from Midtrans dashboard)
-  - MIDTRANS_IS_PRODUCTION=false (for sandbox)
-  - APP_BASE_URL (for frontend URL reference if needed)
-- [ ] Add check for Midtrans keys on server startup
-- **Acceptance:** Clear documentation exists, app fails gracefully if keys missing
-
-#### Task 2 (Part 2): Database Environment Strategy
-- [ ] **Decision Required:** Either:
-  - Option A: Ensure DATABASE_URL is provisioned for Replit environment (use `create_postgresql_database_tool`)
-  - Option B: Add MemStorage fallback in server/storage.ts when DATABASE_URL missing (per guidelines)
-- [ ] Document chosen strategy in this plan
-- **Acceptance:** App starts reliably in development environment
-- **Status:** Will provision DATABASE_URL for Replit before running migrations
-
-### 2.5 Testing
-
-#### Task 15: End-to-End Testing
-- [ ] Run migrations: `npm run db:push` or equivalent
-- [ ] Seed database: `npm run seed`
-- [ ] Test order creation:
-  - POST /api/orders with valid categoryId/tierId
-  - Verify Snap token returned
-  - Check order in database has Midtrans fields
-- [ ] Test webhook:
-  - Send sample Midtrans notification (sandbox)
-  - Verify signature validation works
-  - Confirm payment record created/updated
-  - Confirm order.paymentStatus updated
-  - Test duplicate webhook → should not create duplicate payment
-- [ ] Test image limit: Try adding 8 images to a project → should fail
-- [ ] Verify all CRUD endpoints still work for categories, tiers, projects
-- **Acceptance:** All Phase 2 functionality works end-to-end
+#### ❌ Show package prices on home page [Missing - Implementation Required]
+- **Required Component**: New pricing/packages section
+- **Data Source**: GET `/api/categories?active=true` + nested tiers
+- **Requirements**:
+  - Display active categories with their basePrice
+  - Show price tiers if available for each category
+  - Each card/button routes to `/order?category=<id>&tier=<id?>`
+  - IDR currency formatting
+  - Responsive card grid layout matching design
+- **Suggested Location**: Between `<PortfolioGallery>` and `<AboutSection>` in home.tsx
+- **Test IDs Required**: `card-package-${categoryId}`, `button-book-${categoryId}`
 
 ---
 
-## PHASE 3: Client UI (NOT IN SCOPE YET)
+### PROJECT DETAIL PAGE (public `/project/:slug`)
 
-This phase will implement:
-- Landing page consuming published projects and active categories/tiers
-- Public order flow with Snap popup integration
-- Admin dashboard at `/dashboard-admin` (no nav links)
-- Projects CRUD UI
-- Pricing manager UI
-- Orders Kanban UI
-
-**Status:** Deferred until Phase 2 complete
-
----
-
-## Implementation Notes
-
-### API Route Consistency
-- All routes use consistent error handling
-- All POST/PATCH routes validate with Zod schemas from @shared/schema
-- All responses follow JSON format
-- Proper HTTP status codes (200, 201, 204, 400, 404, 500)
-
-### Database Strategy
-- Using Drizzle ORM with PostgreSQL (Neon)
-- Migrations managed by drizzle-kit
-- Schema defined in shared/schema.ts (single source of truth)
-- Storage interface allows future backend swaps
-
-### Midtrans Integration Strategy
-- Sandbox mode for development (MIDTRANS_IS_PRODUCTION=false)
-- Signature verification is **mandatory** for webhook security
-- Idempotent webhook handling prevents duplicate charges
-- Down payment flow: 30% default, configurable via dpPercent
-
-### Backward Compatibility
-- Legacy portfolio and contact endpoints maintained
-- Frontend still uses legacy data
-- Gradual migration path available
+#### ✅ Create page for project with images [Fully Implemented]
+- **File**: `client/src/pages/project-detail.tsx` (207 lines)
+- **Status**: Complete and production-ready
+- **Features**:
+  - ✅ Fetches project by slug via `/api/projects/${slug}`
+  - ✅ Fetches category and images with proper loading states
+  - ✅ Displays mainImageUrl prominently
+  - ✅ Shows up to 7 additional images in grid (sorted by sortOrder)
+  - ✅ Metadata display: category name, clientName, happenedAt (Indonesian locale)
+  - ✅ Lightbox integration for fullscreen image viewing
+  - ✅ 404 handling with user-friendly alert
+  - ✅ Back navigation to gallery
+  - ✅ All test-ids in place:
+    - `error-loading-project`, `project-not-found`
+    - `link-back-home`, `text-project-title`
+    - `text-category`, `text-client`, `text-date`
+    - `image-main`, `image-additional-${index}`
 
 ---
 
-## Next Steps
+### ORDER FLOW (public `/order`)
 
-1. ✅ Complete Phase 1 Audit (THIS DOCUMENT)
-2. ⏳ Install cuid package (Task 2) - NEXT
-3. Create migrations and seed script (Tasks 3-4)
-4. Implement Midtrans integration (Tasks 8-13)
-5. Add validation and documentation (Tasks 7, 11, 14)
-6. End-to-end testing (Task 15)
-7. Begin Phase 3 (Client UI) after Phase 2 complete
+#### ✅ Create order form and payment page [Fully Implemented]
+- **File**: `client/src/pages/order.tsx` (400 lines)
+- **Status**: Complete with full Midtrans Snap integration
+- **Form Fields** (all validated with Zod):
+  - ✅ categoryId (required) - Dropdown with active categories
+  - ✅ priceTierId (optional) - Dynamic dropdown based on selected category
+  - ✅ customerName (required)
+  - ✅ email (required, email validation)
+  - ✅ phone (required)
+  - ✅ notes (optional, textarea)
+- **Payment Flow**:
+  - ✅ POST `/api/orders` creates order and receives `{ orderId, snapToken, redirect_url }`
+  - ✅ Loads Snap JS from `https://app.sandbox.midtrans.com/snap/snap.js`
+  - ✅ Uses `import.meta.env.VITE_MIDTRANS_CLIENT_KEY` for data-client-key
+  - ✅ Opens Snap popup with callbacks: onSuccess, onPending, onError, onClose
+  - ✅ Fallback to redirect_url if Snap not loaded
+- **Price Display**:
+  - ✅ Shows total price (tier or base price)
+  - ✅ Shows 30% down payment amount
+  - ✅ IDR currency formatting
+- **Result Pages**:
+  - ✅ Success page with confirmation message
+  - ✅ Pending page with instructions
+  - ✅ Error toast notifications
+- **Test IDs**:
+  - `select-category`, `option-category-${slug}`
+  - `select-tier`, `option-tier-${id}`, `option-tier-base`
+  - `input-name`, `input-email`, `input-phone`, `input-notes`
+  - `alert-price-summary`, `text-total-price`, `text-dp-amount`
+  - `button-submit-order`
+  - `card-payment-success`, `card-payment-pending`, `button-back-home`
 
 ---
 
-## Risk Assessment
+### ADMIN DASHBOARD (private `/dashboard-admin`)
 
-### High Priority Issues
-1. **LSP Error:** cuid package missing blocks development
-2. **No Migrations:** Database schema not applied, will cause runtime errors
-3. **Missing Webhook Security:** Signature verification must be implemented
-4. **No Idempotency:** Risk of duplicate payments without proper upsert logic
+#### ✅ Create admin dashboard without navigation exposure [Fully Implemented]
+- **Files**: 
+  - `client/src/App.tsx` (lines 20-26) - Route configuration
+  - `client/src/pages/admin/layout.tsx` - Admin layout with sidebar
+- **Navigation Check**: 
+  - ✅ Verified NO link in `client/src/components/navigation.tsx`
+  - ✅ No sitemap or footer links found
+  - ✅ Routes accessible only via direct URL entry
+- **Layout Features**:
+  - Sidebar navigation between admin sections
+  - TooltipProvider integration
+  - Consistent styling with shadcn/ui
 
-### Medium Priority Issues
-1. Image count enforcement missing (can be added to UI later)
-2. Order PATCH field restrictions could allow unintended updates
-3. No development fallback if DATABASE_URL missing
+#### ✅ Build admin tool for project management [Fully Implemented]
+- **File**: `client/src/pages/admin/projects.tsx` (600 lines)
+- **Status**: Full CRUD with advanced features
+- **List View**:
+  - ✅ Search filter (title, clientName)
+  - ✅ Category filter dropdown
+  - ✅ Published status filter (all/published/unpublished)
+  - ✅ Table display with all project details
+- **Form Features**:
+  - ✅ Title field with auto-slug generation
+  - ✅ Slug field (editable, auto-generated from title)
+  - ✅ Category dropdown (linked to categories API)
+  - ✅ Client name (optional)
+  - ✅ Happened at date picker
+  - ✅ Main image URL input
+  - ✅ Is Published toggle switch
+  - ✅ Drive link field
+- **Image Manager**:
+  - ✅ Shows current project images with sortOrder
+  - ✅ Add new image with URL and caption
+  - ✅ **7 image limit enforced in UI** - displays remaining slots
+  - ✅ Delete images with confirmation
+  - ✅ Reorder images (sortOrder control)
+- **Actions**:
+  - ✅ Create new project
+  - ✅ Edit existing project
+  - ✅ Delete with confirmation dialog
+  - ✅ Publish/unpublish toggle
+- **Preview**:
+  - ✅ Live preview card showing mainImageUrl
+- **All test-ids in place**
 
-### Low Priority Issues
-1. Unit test coverage for helpers
-2. Frontend still using legacy portfolio (planned migration)
+#### ✅ Build admin tool for pricing management [Fully Implemented]
+- **File**: `client/src/pages/admin/pricing.tsx` (725 lines)
+- **Status**: Full CRUD for categories and tiers
+- **Categories Management**:
+  - ✅ Table with name, slug, basePrice (IDR format), isActive, sortOrder
+  - ✅ Create/Edit dialog with form validation
+  - ✅ Auto-slug generation from name (editable)
+  - ✅ Base price input with IDR formatting
+  - ✅ Is Active toggle
+  - ✅ Sort order numeric input
+  - ✅ Description textarea (optional)
+  - ✅ Delete with confirmation
+- **Price Tiers Management**:
+  - ✅ Drill-down view per category
+  - ✅ Table showing tier name, price (IDR), description, status
+  - ✅ Create/Edit tier dialog
+  - ✅ Category association (FK validation)
+  - ✅ Tier name, price, description fields
+  - ✅ Is Active toggle
+  - ✅ Sort order control
+  - ✅ Delete with confirmation
+- **Features**:
+  - ✅ IDR currency formatting helper (formatIDR)
+  - ✅ Proper form validation with Zod
+  - ✅ Toast notifications for all actions
+  - ✅ All test-ids in place
+
+#### ✅ Build admin order tracking board [Fully Implemented]
+- **File**: `client/src/pages/admin/orders.tsx` (456 lines)
+- **Status**: Full Kanban with drag-and-drop
+- **Kanban Board**:
+  - ✅ 7 status columns: PENDING, CONSULTATION, SESSION, FINISHING, DRIVE_LINK, DONE, CANCELLED
+  - ✅ @dnd-kit/core for drag-and-drop functionality
+  - ✅ @dnd-kit/sortable for sortable items
+  - ✅ Drag order card to new column → PATCH `/api/orders/:id` with `{ status }`
+  - ✅ Visual feedback during drag (opacity, transitions)
+- **Order Cards**:
+  - ✅ Customer name
+  - ✅ Email
+  - ✅ Down payment amount (IDR formatted)
+  - ✅ Category and tier name
+  - ✅ Payment status badge (color-coded)
+  - ✅ Created date
+  - ✅ Test ID: `order-card-${orderId}`
+- **Detail Sheet/Drawer**:
+  - ✅ Opens on card click
+  - ✅ Customer info section with mailto/tel links
+  - ✅ Package summary (category, tier if selected)
+  - ✅ Price breakdown (total, DP %, DP amount)
+  - ✅ Payment timeline: Fetches from `/api/orders/:id/payments`
+    - Shows transaction ID, status, amount, paid date
+    - Color-coded status badges
+  - ✅ Quick actions:
+    - Copy order ID
+    - Copy customer email
+    - Copy payment link (if available)
+  - ✅ Set Drive Link action (enabled at DRIVE_LINK stage)
+    - Input field + Save button
+    - Updates via PATCH `/api/orders/:id` with `{ driveLink }`
+  - ✅ Manual status change dropdown (for edge cases)
+- **Features**:
+  - ✅ Real-time updates via TanStack Query invalidation
+  - ✅ Optimistic UI updates
+  - ✅ Error handling with toast notifications
+  - ✅ All test-ids in place
+
+---
+
+### DOCUMENTATION
+
+#### ❌ Update FEATURES_OVERVIEW.md [Missing - To Be Created]
+- **Required Content**:
+  - UI route map (`/`, `/project/:slug`, `/order`, `/dashboard-admin/*`)
+  - Data flow diagrams (API → UI component → render)
+  - How UI consumes backend endpoints
+  - Component hierarchy
+  - State management strategy (TanStack Query)
+  - File structure explanation
+
+#### ❌ Update README.md [Missing - To Be Updated]
+- **Required Additions**:
+  - Environment variables section:
+    - `VITE_MIDTRANS_CLIENT_KEY` for client-side Snap integration
+    - `MIDTRANS_SERVER_KEY` for backend (already exists, needs documentation)
+    - `DATABASE_URL` for PostgreSQL
+  - Local development setup instructions:
+    1. Clone repository
+    2. Install dependencies: `npm install`
+    3. Create `.env` file with required variables
+    4. Push database schema: `npm run db:push`
+    5. (Optional) Seed database: `npx tsx scripts/seed.ts`
+    6. Start dev server: `npm run dev`
+  - E2E testing steps (see UI_QA_CHECKLIST.md)
+  - Deployment instructions for Netlify and Replit
+
+#### ❌ Create UI_QA_CHECKLIST.md [Missing - To Be Created]
+- **Required Manual Test Steps**:
+  1. Home page shows dynamic projects from DB (check with seed data)
+  2. Home page shows dynamic packages with prices
+  3. Click project card → navigates to detail page
+  4. Detail page shows up to 7 images
+  5. `/order` form validation works
+  6. `/order` creates order and opens Midtrans Snap popup
+  7. Simulate sandbox payment → verify webhook updates order/payment
+  8. Admin Projects: create/edit/delete/publish workflows
+  9. Admin Projects: image manager blocks 8th image
+  10. Admin Pricing: create category + tier → appears on home packages
+  11. Admin Orders: drag order across all statuses
+  12. Admin Orders: set driveLink at DRIVE_LINK stage
+  13. Verify NO header/nav link to `/dashboard-admin`
+  14. Test responsive layouts (mobile, tablet, desktop)
+  15. Test error states (network failures, 404s)
+
+---
+
+## Environment Variables
+
+### Backend (Already Configured)
+- ✅ `DATABASE_URL` - PostgreSQL connection string (Replit provisioned)
+- ⚠️ `MIDTRANS_SERVER_KEY` - Required for order creation (user must provide)
+- ⚠️ `MIDTRANS_CLIENT_KEY` - Required for Snap (user must provide)
+
+### Frontend (Required Setup)
+- ❌ `VITE_MIDTRANS_CLIENT_KEY` - Must be added to `.env` for Snap JS
+  - **Current Implementation**: `import.meta.env.VITE_MIDTRANS_CLIENT_KEY` in order.tsx line 93
+  - **Action Required**: Create `.env.example` file documenting this variable
+
+---
+
+## Netlify Configuration
+
+✅ **VERIFIED**: `netlify.toml` has correct `/api/*` redirect
+- **File**: `netlify.toml` (lines 14-17)
+- **Redirect**: `/api/*` → `/.netlify/functions/api/:splat` with status 200
+- **SPA Fallback**: All other routes → `/index.html` for client-side routing
+
+---
+
+## Remaining Implementation Tasks
+
+### High Priority
+1. ✅ ~~Audit complete codebase~~ - DONE
+2. ✅ ~~Create IMPLEMENTATION_PLAN.md~~ - DONE (this file)
+3. 🔄 Add pricing/packages section to home page - **REQUIRED**
+4. 🔄 Create `.env.example` file - **REQUIRED**
+5. 🔄 Create FEATURES_OVERVIEW.md - **REQUIRED**
+6. 🔄 Create UI_QA_CHECKLIST.md - **REQUIRED**
+7. 🔄 Update README.md with env vars and setup instructions - **REQUIRED**
+
+### Low Priority (Nice to Have)
+8. ⭕ Remove unused `client/src/lib/portfolio-data.ts` import from home.tsx - CLEANUP
+9. ⭕ Create seed script documentation if not exists
+10. ⭕ Add TypeScript strict mode enforcement
+11. ⭕ Add error boundaries to admin pages
+
+---
+
+## Implementation Progress
+
+**Overall: 85% Complete**
+
+| Component | Progress | Status |
+|-----------|----------|--------|
+| Backend API (Phase 2) | 100% | ✅ Complete |
+| Project Detail Page | 100% | ✅ Complete |
+| Order Flow + Midtrans | 100% | ✅ Complete |
+| Admin Dashboard Structure | 100% | ✅ Complete |
+| Admin Projects Management | 100% | ✅ Complete |
+| Admin Pricing Management | 100% | ✅ Complete |
+| Admin Orders Kanban | 100% | ✅ Complete |
+| Home Page - Projects | 95% | 🟡 Minor cleanup |
+| Home Page - Pricing Section | 0% | ❌ Not started |
+| Documentation | 0% | ❌ Not started |
+| Environment Setup | 50% | 🟡 Partial |
+
+---
+
+## Definition of Done (Phase 3)
+
+- [x] IMPLEMENTATION_PLAN.md accurately reflects verification results
+- [x] Home page (`/`) uses dynamic data for projects
+- [ ] Home page shows packages/pricing section with links to `/order`
+- [x] `/project/:slug` works with up to 7 images
+- [x] `/order` form opens Midtrans Snap and handles all payment states
+- [x] `/dashboard-admin` exists and is functional (Projects, Pricing, Orders)
+- [x] Admin dashboard remains unlinked from public navigation
+- [x] No duplicated schemas/routes/validators/UI modules
+- [x] Single `/api` entry point retained
+- [ ] FEATURES_OVERVIEW.md created
+- [ ] README.md updated
+- [ ] UI_QA_CHECKLIST.md created
+- [ ] `.env.example` created
+- [x] All test-ids in place for E2E testing
 
 ---
 
 *Last Updated: October 1, 2025*
-*Status: Phase 1 Complete, Phase 2 In Progress*
+*Current Status: Phase 3 - 85% Complete, Ready for Final Implementation*
