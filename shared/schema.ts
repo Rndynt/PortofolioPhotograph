@@ -83,6 +83,7 @@ export const orders = pgTable("orders", {
   snapToken: text("snap_token"),
   snapRedirectUrl: text("snap_redirect_url"),
   paymentStatus: text("payment_status"),
+  driveLink: text("drive_link"),
   createdAt: timestamp("created_at").defaultNow().notNull(),
   updatedAt: timestamp("updated_at").defaultNow().notNull(),
 });

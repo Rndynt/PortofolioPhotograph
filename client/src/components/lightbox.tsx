@@ -2,18 +2,24 @@ import { useState, useEffect } from "react";
 import { X, ChevronLeft, ChevronRight } from "lucide-react";
 import { portfolioProjects } from "@/lib/portfolio-data";
 
+interface LightboxImage {
+  url: string;
+  alt: string;
+}
+
 interface LightboxProps {
   isOpen: boolean;
   projectId: string | null;
   startIndex?: number;
   onClose: () => void;
+  images?: LightboxImage[];
 }
 
-export default function Lightbox({ isOpen, projectId, startIndex = 0, onClose }: LightboxProps) {
+export default function Lightbox({ isOpen, projectId, startIndex = 0, onClose, images }: LightboxProps) {
   const [currentPhotoIndex, setCurrentPhotoIndex] = useState(startIndex);
 
   const project = projectId ? portfolioProjects.find(p => p.id === projectId) : null;
-  const projectPhotos = project?.photos || [];
+  const projectPhotos = images || project?.photos || [];
 
   useEffect(() => {
     if (isOpen && projectId) {
@@ -73,9 +79,10 @@ export default function Lightbox({ isOpen, projectId, startIndex = 0, onClose }:
     }
   };
 
-  if (!isOpen || !project) return null;
+  if (!isOpen || (projectPhotos.length === 0)) return null;
 
   const currentPhoto = projectPhotos[currentPhotoIndex];
+  const displayTitle = project?.title || "Photo Gallery";
 
   return (
     <div 
@@ -120,7 +127,7 @@ export default function Lightbox({ isOpen, projectId, startIndex = 0, onClose }:
 
       <div className="w-full max-w-6xl bg-black/50 rounded-lg p-4">
         <div className="flex items-center justify-between mb-3">
-          <h3 className="text-white font-semibold text-lg">{project.title}</h3>
+          <h3 className="text-white font-semibold text-lg">{displayTitle}</h3>
           <span className="text-white/70 text-sm">
             {currentPhotoIndex + 1} / {projectPhotos.length}
           </span>
@@ -129,7 +136,7 @@ export default function Lightbox({ isOpen, projectId, startIndex = 0, onClose }:
         <div className="flex gap-2 overflow-x-auto pb-2" data-testid="thumbnail-strip">
           {projectPhotos.map((photo, index) => (
             <button
-              key={photo.id}
+              key={index}
               onClick={() => handleThumbnailClick(index)}
               className={`flex-shrink-0 w-16 h-16 sm:w-20 sm:h-20 rounded cursor-pointer transition-all ${
                 index === currentPhotoIndex
