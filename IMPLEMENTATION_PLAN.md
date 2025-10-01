@@ -7,7 +7,17 @@ Build a production-ready admin dashboard at `/dashboard-admin` (no nav links) wi
 - Orders with down payment via Midtrans Snap + webhook
 - Status pipeline: PENDING → CONSULTATION → SESSION → FINISHING → DRIVE_LINK → DONE (+ CANCELLED)
 
-## Current Status: PHASE 2 - Backend Implementation (In Progress)
+## Current Status: PHASE 2 - Backend Implementation ✅ COMPLETED
+
+## Task List (from specification)
+- [x] **Build tools for payment processing** - Midtrans client wrapper, signature verification, DP computation ✅
+- [x] **Add order feature with payments** - POST /api/orders with Snap token generation ✅  
+- [x] **Handle payment updates securely** - Webhook with signature verification and idempotent upsert ✅
+- [x] **Add tools to manage payments** - Payment upsert methods and transaction tracking ✅
+- [x] **Limit project images to seven** - Enforced with PostgreSQL advisory locks for true concurrency safety ✅
+- [x] **Secure order updates to fields** - Restricted PATCH to only allow status, notes, driveLink ✅
+- [ ] **Document and check payment settings** - ENV vars documented below, verification script pending
+- [ ] **Test full process from start** - Manual end-to-end testing pending (requires Midtrans sandbox credentials)
 
 ---
 
@@ -52,33 +62,58 @@ Build a production-ready admin dashboard at `/dashboard-admin` (no nav links) wi
 - ✅ Netlify serverless function wrapper (netlify/functions/api.ts)
 - ✅ Single entry point for all API routes (no duplication)
 
-#### ❌ MISSING / TODO
+#### ✅ PHASE 2 COMPLETED (October 1, 2025)
 
-**1. Dependencies**
-- ❌ `cuid` package not installed → **LSP ERROR in shared/schema.ts**
-- ❌ `midtrans-client` package likely not installed
+**1. Dependencies** ✅
+- ✅ `cuid` package installed
+- ✅ `midtrans-client` package installed
 
-**2. Database**
-- ❌ No migrations created (migrations/ directory doesn't exist)
-- ❌ No seed script (scripts/seed.ts doesn't exist)
+**2. Database** ✅
+- ✅ PostgreSQL database provisioned on Replit
+- ✅ All tables created via `npm run db:push` (categories, price_tiers, projects, project_images, orders, payments)
+- ✅ Seed script executed successfully with demo data
 
-**3. Midtrans Integration**
-- ❌ POST /api/orders endpoint (missing Snap token creation logic)
-- ❌ POST /api/midtrans/webhook endpoint (missing entirely)
-- ❌ Signature verification helper (SHA512: order_id + status_code + gross_amount + SERVER_KEY)
-- ❌ DP amount calculation helper
-- ❌ Snap client wrapper/helper functions
-- ❌ Idempotent payment upsert logic in webhook
-- ❌ Auto-status update (PENDING → CONSULTATION on settlement)
+**3. Midtrans Integration** ✅
+- ✅ POST /api/orders endpoint with Snap token creation
+  - Pricing logic (tier.price or category.basePrice)
+  - DP computation (30% default)
+  - Snap transaction creation with proper item/customer details
+  - Order cleanup on Midtrans failure
+  - Environment variable guards
+- ✅ POST /api/midtrans/webhook endpoint
+  - SHA512 signature verification
+  - Idempotent payment upsert
+  - Auto-status update (PENDING → CONSULTATION on settlement)
+  - Returns 200 OK for idempotency
+- ✅ Helper functions (server/midtrans/)
+  - verifySignature() with timing-safe comparison
+  - computeDpAmount() with validation
+  - generateOrderId() for consistent formatting
+- ✅ Midtrans client wrapper (createSnapTransaction)
 
-**4. Validation & Enforcement**
-- ❌ Project images limit enforcement (≤7 images per project)
-- ❌ Order PATCH field restrictions (should not allow arbitrary field updates)
-- ❌ Payment upsert/update methods in storage (currently only create)
+**4. Validation & Enforcement** ✅
+- ✅ Project images limit enforcement (≤7 per project)
+  - PostgreSQL advisory locks for true concurrency safety
+  - Prevents TOCTOU race conditions
+- ✅ Order PATCH field restrictions
+  - Only allows: status, notes, driveLink
+  - Blocks unauthorized updates to prices/payments
+- ✅ Payment storage methods
+  - upsertPayment() with idempotent behavior
+  - getPaymentByTransaction() for lookups
+  - transactionId unique constraint
+- ✅ Data integrity
+  - priceTier.categoryId validation
+  - Error stratification (400 vs 500)
 
-**5. Configuration**
-- ❌ Environment variables documentation (MIDTRANS_SERVER_KEY, MIDTRANS_CLIENT_KEY, MIDTRANS_IS_PRODUCTION)
-- ❌ No fallback for missing DATABASE_URL in development (db.ts throws immediately)
+**5. Configuration & Documentation**
+- ✅ Environment variables documented:
+  - DATABASE_URL (provisioned)
+  - MIDTRANS_SERVER_KEY (required for payments)
+  - MIDTRANS_CLIENT_KEY (required for payments)
+  - MIDTRANS_IS_PRODUCTION=false (for sandbox)
+- ✅ Database configured and seeded
+- ⏸️ Frontend implementation deferred to Phase 3
 
 ### Duplication Assessment
 
