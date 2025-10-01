@@ -1,0 +1,166 @@
+```md
+You are a senior TypeScript/Node engineer working **inside this repository**: https://github.com/Rndynt/PortofolioPhotograph.
+
+GOAL
+Finish a production-ready **Admin Dashboard at `/dashboard-admin` (NO login yet)** plus the backend needed to support:
+1) **Project Gallery** (each project: 1 main image + up to 7 extra images, publish toggle, optional Google Drive link).
+2) **Category-based Pricing** (Category + optional Price Tiers).
+3) **Orders** with **Down Payment via Midtrans Snap** + **Webhook** + status pipeline:
+   `PENDING → CONSULTATION → SESSION → FINISHING → DRIVE_LINK → DONE` (+ `CANCELLED`).
+4) Landing site consumes **published projects** and **active categories/tiers**, and exposes a **public order** flow.
+
+IMPORTANT UX: Do **NOT** expose any header/menu/nav link to `/dashboard-admin`. It must be reachable only by direct URL typing.
+
+--------------------------------------------------------------------------------
+NO-DUPLICATION POLICY (APPLIES TO ALL WORK)
+- **Before coding, audit existing code** (e.g., `server/routes.ts`, `netlify/functions/api.ts`, schemas, types, zod validators).
+- **Do not re-implement** features that already exist. **Refactor or extend** in place.
+- Ensure there is **one source of truth** for schemas, validators, and routes. If you find duplicates, **consolidate and remove** the redundant code.
+- Reuse existing Netlify wrapper(s) and Express app if present; **do not add parallel function files** that mirror the same endpoints.
+
+--------------------------------------------------------------------------------
+PHASES
+**Phase 1 — Audit & Plan**
+1) Scan current code (client, server, shared, netlify/functions) and the agent’s last changes.
+2) Create/Update `IMPLEMENTATION_PLAN.md` at repo root:
+   - Checklist of what is already implemented vs. missing from this spec.
+   - Mark any spots where duplication exists and how you will consolidate.
+   - This file must remain the living task list for the rest of the work.
+
+**Phase 2 — Backend APIs (Zod + Midtrans)**
+Build backend API endpoints for **categories, price tiers, projects, and orders**. Integrate **Midtrans** for payments and handle webhooks with **signature verification** and **idempotency**.
+- All endpoints validated with **Zod**; strict TypeScript types; consistent JSON errors.
+- Use **Drizzle ORM** (SQLite dev). Provide migrations + a `scripts/seed.ts`.
+- Netlify functions under `netlify/functions/*` wrapping the existing app (serverless-http OK). Keep a single `/api` entrypoint and route internally to handlers.
+- **Signature verification** for Midtrans Webhook:
+  `signature_key = SHA512(order_id + status_code + gross_amount + SERVER_KEY)`
+- **Idempotency**: upsert Payment by `(order_id, transaction_id/status)`; webhook must be safe on repeat notifications.
+
+**Phase 3 — Client (Landing + Admin)**
+- Landing: gallery of **published** projects, packages from active categories/tiers, public order flow → Snap popup.
+- Admin at **`/dashboard-admin`** (no header link): Projects CRUD, Pricing manager (categories + tiers), Orders Kanban + detail drawer.
+
+> For this iteration, **complete Phase 2** fully, then proceed with the specific task below.
+
+--------------------------------------------------------------------------------
+BACKEND DATA MODEL (DRIZZLE)
+- **categories**: id (cuid), name (unique), slug (unique), description?, basePrice int, isActive bool, sortOrder int, createdAt, updatedAt
+- **price_tiers**: id, categoryId (FK→categories), name, price int, description?, isActive bool, sortOrder int
+- **projects**: id, title, slug (unique), categoryId?, clientName?, happenedAt datetime?, mainImageUrl, isPublished bool, driveLink?, createdAt, updatedAt
+- **project_images**: id, projectId (FK→projects), url, caption?, sortOrder int
+- **orders**: id, categoryId (FK), priceTierId?, customerName, email, phone, notes?, status enum('PENDING','CONSULTATION','SESSION','FINISHING','DRIVE_LINK','DONE','CANCELLED') default 'PENDING', totalPrice int, dpPercent int default 30, dpAmount int, midtransOrderId?, snapToken?, snapRedirectUrl?, paymentStatus?, createdAt, updatedAt
+- **payments**: id, orderId (FK→orders), provider default "midtrans", type default "DOWN_PAYMENT", status ('pending'|'settlement'|'deny'|'expire'|'cancel'), grossAmount int, paidAt datetime?, rawNotifJson JSON?, createdAt
+
+Provide `drizzle-kit` config, SQL migrations, and `scripts/seed.ts`:
+- 2–3 demo categories + tiers
+- 1–2 demo projects (with mainImageUrl and ≤7 images)
+- 1 demo PENDING order
+
+--------------------------------------------------------------------------------
+SHARED TYPES & VALIDATION
+- In `shared/`, add **Zod schemas** + exported **TS types** for Category, PriceTier, Project, ProjectImage, Order, Payment and enums.
+- Use the same schemas server-side (validation) and client-side (type-safe forms).
+
+--------------------------------------------------------------------------------
+API SURFACE (JSON over HTTP under `/api/*`)
+(Ensure no duplication; extend existing routes instead of creating parallel ones.)
+
+**Categories**
+- `GET  /api/categories?active=bool`
+- `GET  /api/categories/:id`
+- `POST /api/categories`
+- `PATCH /api/categories/:id`
+- `DELETE /api/categories/:id`
+
+**Price Tiers**
+- `GET  /api/categories/:categoryId/tiers`
+- `POST /api/categories/:categoryId/tiers`
+- `PATCH /api/tiers/:id`
+- `DELETE /api/tiers/:id`
+
+**Projects**
+- `GET    /api/projects?published=bool&categoryId=&search=`
+- `GET    /api/projects/:idOrSlug`
+- `POST   /api/projects`
+- `PATCH  /api/projects/:id`
+- `DELETE /api/projects/:id`
+- `POST   /api/projects/:id/images` (add image URL)
+- `PATCH  /api/project-images/:imageId`
+- `DELETE /api/project-images/:imageId`
+
+**Orders**
+- `POST  /api/orders`  ← **Implement now with Midtrans (see TASK BELOW)**
+- `GET   /api/orders?status=...`
+- `GET   /api/orders/:id`
+- `PATCH /api/orders/:id` (update status/notes)
+- `GET   /api/orders/:id/payments`
+
+**Midtrans Webhook**
+- `POST /api/midtrans/webhook`
+  - Verify `signature_key` before any write:
+    `sha512(order_id + status_code + gross_amount + SERVER_KEY)`
+  - Idempotent upsert Payment (persist full payload in `rawNotifJson`, set `paidAt` when applicable).
+  - Update `order.paymentStatus = transaction_status`.
+  - Optional: if `transaction_status='settlement'` and `order.status='PENDING'`, auto-bump to `CONSULTATION` (config flag).
+  - Always return 200 OK even on repeats.
+
+**Netlify Redirect (confirm exists in netlify.toml)**
+```
+
+[[redirects]]
+from = "/api/*"
+to = "/.netlify/functions/:splat"
+status = 200
+
+```
+
+--------------------------------------------------------------------------------
+ENV
+- `MIDTRANS_IS_PRODUCTION=false`
+- `MIDTRANS_SERVER_KEY=SB-Mid-server-xxxx`
+- `MIDTRANS_CLIENT_KEY=SB-Mid-client-xxxx`
+- `APP_BASE_URL=http://localhost:8888` (Netlify dev) or appropriate base used by client for `/api`
+- (Optional) CLOUDINARY_* if you add URL-based uploads/presets.
+
+--------------------------------------------------------------------------------
+QUALITY BAR & TESTING
+- Zod guards on all requests; consistent error model.
+- ≤7 `project_images` enforced **in UI** (later in Phase 3).
+- Unit tests for `computeDpAmount` and webhook signature verification helper.
+- Accessibility-ready states; lint passes; no `any` or dead code.
+
+--------------------------------------------------------------------------------
+TASKS TO PERFORM NOW
+1) **Update the task list** (`IMPLEMENTATION_PLAN.md`):
+   - Mark Phase 2 scope as: “Build all backend API endpoints (categories, price tiers, projects, orders) with Zod validation and Midtrans integration (webhook with signature verification + idempotency).”
+   - Note any already-implemented endpoints and ensure **no duplicate implementation**—consolidate or refactor as needed.
+
+2) **Implement PHASE 2** end-to-end:
+   - Ensure all endpoints listed above exist, validated by Zod, and wired through the single Netlify `/api` function.
+   - Add/confirm Drizzle schema + migrations + seed.
+   - Implement Midtrans webhook with signature verification + idempotency.
+
+3) **Implement `POST /api/orders` with Midtrans integration** (detailed steps):
+   - **Validate input (Zod)**: `{ categoryId: string; priceTierId?: string; customerName: string; email: string; phone: string; notes?: string }`.
+   - **Load pricing**:
+     - If `priceTierId` present → `totalPrice = tier.price`
+     - Else → `totalPrice = category.basePrice`
+   - **Compute DP**: `dpPercent = 30` (configurable), `dpAmount = Math.round(totalPrice * dpPercent / 100)`.
+   - **Create Order** row (status=`PENDING`) with computed fields.
+   - **Create Midtrans Snap** transaction for `dpAmount`:
+     - `order_id = "order_" + order.id` (or a stable format tied to the order)
+     - Include `customer_details` and `item_details` (e.g., “Down Payment for <Category/Tier>”).
+     - Use Server Key for Basic Auth where required.
+   - **Persist** `midtransOrderId`, `snapToken`, `redirect_url` on the order.
+   - **Respond** `{ orderId, snapToken, redirect_url }` with 201.
+
+4) **Re-run migrations and smoke-test**:
+   - Seed data → hit `POST /api/orders` with a sample payload → confirm Snap token returned.
+   - Post a sample **webhook** payload (sandbox) → ensure idempotent payment upsert and status update.
+
+5) Commit:
+   - Message example: `feat(api): complete Phase 2 backend (Zod+Drizzle+Midtrans), implement POST /api/orders and webhook idempotency`
+   - Update `README.md` + `FEATURES_OVERVIEW.md` with how to test Midtrans sandbox and endpoint list.
+
+**Remember**: Keep `/dashboard-admin` route reserved for Phase 3 UI work and **do not** add any link to it in public headers.
+```
