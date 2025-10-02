@@ -18,18 +18,35 @@ async function seed() {
     console.log("📦 Seeding categories...");
     
     // Insert categories
-    const [weddingCategory, portraitCategory, commercialCategory] = await db
+    /*const [weddingCategory, portraitCategory, commercialCategory] = await db*/
+    const [prepostWeddingCategory, weddingCategory, graduationCategory] = await db
       .insert(categories)
       .values([
         {
-          name: "Wedding Photography",
-          slug: "wedding",
-          description: "Capture your special day with stunning wedding photography",
+          name: "Pre/Post Wedding",
+          slug: "prepostwed",
+          description: "Timeless Elegance",
           basePrice: 5000000,
           isActive: true,
           sortOrder: 1,
         },
         {
+          name: "Bride Wedding Event",
+          slug: "wedding",
+          description: "Timeless & Memorable",
+          basePrice: 5000000,
+          isActive: true,
+          sortOrder: 2,
+        },
+        {
+          name: "Graduation",
+          slug: "graduation",
+          description: "Graduation",
+          basePrice: 5000000,
+          isActive: true,
+          sortOrder: 3,
+        },
+        /** {
           name: "Portrait Photography",
           slug: "portrait",
           description: "Professional portrait sessions for individuals and families",
@@ -44,7 +61,7 @@ async function seed() {
           basePrice: 8000000,
           isActive: true,
           sortOrder: 3,
-        },
+        }, */
       ])
       .returning();
 
@@ -52,33 +69,48 @@ async function seed() {
 
     console.log("💰 Seeding price tiers...");
 
+    // Insert price tiers for Pre/Post Wedding
+    const prepostweddingTiers = await db
+      .insert(priceTiers)
+      .values([
+        {
+          categoryId: prepostWeddingCategory.id,
+          name: "Photo Only",
+          price: 1250000,
+          description: "1 hours coverage, Unlimited Shoots, 40 edited photos, All files Original",
+          isActive: true,
+          sortOrder: 1,
+        },
+        {
+          categoryId: prepostWeddingCategory.id,
+          name: "Photo & Video",
+          price: 1850000,
+          description: "Full Session coverage, Unlimited Shoots, 40 edited photos, 10 photo retouch & instagram layout, 1 reels portrait video, All files original",
+          isActive: true,
+          sortOrder: 2,
+        },
+      ])
+      .returning();
+
     // Insert price tiers for Wedding
     const weddingTiers = await db
       .insert(priceTiers)
       .values([
         {
           categoryId: weddingCategory.id,
-          name: "Basic Package",
-          price: 3000000,
-          description: "4 hours coverage, 100 edited photos, online gallery",
+          name: "Minimalist Package",
+          price: 1777000,
+          description: "3 hours coverage, Unlimited Shoots, 1 Magnetic Album, Bonus Flashdisk 16GB",
           isActive: true,
           sortOrder: 1,
         },
         {
           categoryId: weddingCategory.id,
-          name: "Premium Package",
-          price: 5000000,
-          description: "8 hours coverage, 200 edited photos, online gallery, engagement session",
+          name: "Brides Sweet Package",
+          price: 3960000,
+          description: "Full day coverage, Unlimited Shoots, 1 Wooden Album, 1 Frameless | large size, Bonus Flashdisk 16GB",
           isActive: true,
           sortOrder: 2,
-        },
-        {
-          categoryId: weddingCategory.id,
-          name: "Elite Package",
-          price: 8000000,
-          description: "Full day coverage, 400+ edited photos, online gallery, engagement session, album",
-          isActive: true,
-          sortOrder: 3,
         },
       ])
       .returning();
