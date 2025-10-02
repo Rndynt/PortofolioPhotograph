@@ -245,7 +245,7 @@ export default function AdminPricing() {
                     Create Category
                   </Button>
                 </DialogTrigger>
-                <DialogContent>
+                <DialogContent className="w-[calc(100%-32px)] sm:max-w-[425px] max-h-[90vh] overflow-y-auto">
                   <DialogHeader>
                     <DialogTitle>{editingCategory ? "Edit Category" : "Create New Category"}</DialogTitle>
                     <DialogDescription>
@@ -463,7 +463,7 @@ export default function AdminPricing() {
                     Create Tier
                   </Button>
                 </DialogTrigger>
-                <DialogContent>
+                <DialogContent className="w-[calc(100%-32px)] sm:max-w-[425px] max-h-[90vh] overflow-y-auto">
                   <DialogHeader>
                     <DialogTitle>{editingTier ? "Edit Price Tier" : "Create New Price Tier"}</DialogTitle>
                     <DialogDescription>
@@ -478,16 +478,24 @@ export default function AdminPricing() {
                         render={({ field }) => (
                           <FormItem>
                             <FormLabel>Category *</FormLabel>
-                            <Select onValueChange={field.onChange} value={field.value}>
+                            <Select 
+                              onValueChange={field.onChange} 
+                              value={field.value || ""}
+                              disabled={!categories || categories.length === 0}
+                            >
                               <FormControl>
                                 <SelectTrigger data-testid="select-tier-category">
-                                  <SelectValue placeholder="Select category" />
+                                  <SelectValue placeholder={!categories || categories.length === 0 ? "No categories available" : "Select category"} />
                                 </SelectTrigger>
                               </FormControl>
                               <SelectContent>
-                                {categories?.map((cat) => (
-                                  <SelectItem key={cat.id} value={cat.id}>{cat.name}</SelectItem>
-                                ))}
+                                {categories && categories.length > 0 ? (
+                                  categories.map((cat) => (
+                                    <SelectItem key={cat.id} value={cat.id}>{cat.name}</SelectItem>
+                                  ))
+                                ) : (
+                                  <div className="px-2 py-1.5 text-sm text-gray-500">No categories available</div>
+                                )}
                               </SelectContent>
                             </Select>
                             <FormMessage />
@@ -605,14 +613,23 @@ export default function AdminPricing() {
           </CardHeader>
           <CardContent>
             <div className="mb-4">
-              <Select value={selectedCategoryForTiers || ""} onValueChange={(value) => setSelectedCategoryForTiers(value || null)}>
+              <Select 
+                value={selectedCategoryForTiers || "none"} 
+                onValueChange={(value) => setSelectedCategoryForTiers(value === "none" ? null : value)}
+                disabled={!categories || categories.length === 0}
+              >
                 <SelectTrigger className="w-[280px]" data-testid="select-filter-tier-category">
-                  <SelectValue placeholder="Select category to view tiers" />
+                  <SelectValue placeholder={!categories || categories.length === 0 ? "No categories available" : "Select category to view tiers"} />
                 </SelectTrigger>
                 <SelectContent>
-                  {categories?.map((cat) => (
-                    <SelectItem key={cat.id} value={cat.id}>{cat.name}</SelectItem>
-                  ))}
+                  <SelectItem value="none">Select category to view tiers</SelectItem>
+                  {categories && categories.length > 0 ? (
+                    categories.map((cat) => (
+                      <SelectItem key={cat.id} value={cat.id}>{cat.name}</SelectItem>
+                    ))
+                  ) : (
+                    <div className="px-2 py-1.5 text-sm text-gray-500">No categories available</div>
+                  )}
                 </SelectContent>
               </Select>
             </div>

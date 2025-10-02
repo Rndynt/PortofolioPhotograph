@@ -36,7 +36,6 @@ const ORDER_STATUSES = [
 interface OrderWithDetails extends Order {
   categoryName?: string;
   tierName?: string;
-  driveLink?: string | null;
 }
 
 interface OrderCardProps {

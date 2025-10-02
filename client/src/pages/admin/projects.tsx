@@ -247,7 +247,7 @@ export default function AdminProjects() {
                 Create Project
               </Button>
             </DialogTrigger>
-            <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
+            <DialogContent className="w-[calc(100%-32px)] sm:max-w-2xl max-h-[90vh] overflow-y-auto">
               <DialogHeader>
                 <DialogTitle>{editingProject ? "Edit Project" : "Create New Project"}</DialogTitle>
                 <DialogDescription>
@@ -301,14 +301,18 @@ export default function AdminProjects() {
                     render={({ field }) => (
                       <FormItem>
                         <FormLabel>Category</FormLabel>
-                        <Select onValueChange={field.onChange} value={field.value || ""}>
+                        <Select 
+                          onValueChange={(value) => field.onChange(value === "none" ? null : value)} 
+                          value={field.value || "none"}
+                          disabled={!categories || categories.length === 0}
+                        >
                           <FormControl>
                             <SelectTrigger data-testid="select-project-category">
-                              <SelectValue placeholder="Select category" />
+                              <SelectValue placeholder={!categories || categories.length === 0 ? "No categories available" : "Select category"} />
                             </SelectTrigger>
                           </FormControl>
                           <SelectContent>
-                            <SelectItem value="">None</SelectItem>
+                            <SelectItem value="none">None</SelectItem>
                             {categories?.map((cat) => (
                               <SelectItem key={cat.id} value={cat.id}>{cat.name}</SelectItem>
                             ))}
