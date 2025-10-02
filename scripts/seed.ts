@@ -115,6 +115,29 @@ async function seed() {
       ])
       .returning();
 
+    // Insert price tiers for Wedding
+    const graduationTiers = await db
+      .insert(priceTiers)
+      .values([
+        {
+          categoryId: graduationCategory.id,
+          name: "Chill Sweet Shapes",
+          price: 750000,
+          description: "75 minutes coverage, 1 client, Unlimited Shoots, 25 edited photo, All original files",
+          isActive: true,
+          sortOrder: 1,
+        },
+        {
+          categoryId: graduationCategory.id,
+          name: "Happy Sweet Shapes",
+          price: 1750000,
+          description: "Half day (4-5 hours) coverage, 1 client, Unlimited Shoots (incl. w/Friends & Family), 1 reels portrait video, 32 edites photo, All original files, Bonus layout slide instagram 1 feeds",
+          isActive: true,
+          sortOrder: 2,
+        },
+      ])
+      .returning();
+    
     // Insert price tiers for Portrait
     const portraitTiers = await db
       .insert(priceTiers)
