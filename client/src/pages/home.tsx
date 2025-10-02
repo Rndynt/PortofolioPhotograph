@@ -12,8 +12,8 @@ import Lightbox from "@/components/lightbox";
 export default function Home() {
   const [selectedCategory, setSelectedCategory] = useState('All');
   const [lightboxOpen, setLightboxOpen] = useState(false);
-  const [lightboxProject, setLightboxProject] = useState<{ projectId: string | null; startIndex: number }>({
-    projectId: null,
+  const [lightboxProject, setLightboxProject] = useState<{ projectSlug: string | null; startIndex: number }>({
+    projectSlug: null,
     startIndex: 0
   });
 
@@ -21,8 +21,8 @@ export default function Home() {
     setSelectedCategory(category);
   };
 
-  const handleProjectClick = (projectId: string, startIndex: number) => {
-    setLightboxProject({ projectId, startIndex });
+  const handleProjectClick = (projectSlug: string, startIndex: number) => {
+    setLightboxProject({ projectSlug, startIndex });
     setLightboxOpen(true);
   };
 
@@ -59,7 +59,7 @@ export default function Home() {
       <SocialMediaSection />
       <Lightbox 
         isOpen={lightboxOpen}
-        projectId={lightboxProject.projectId}
+        projectSlug={lightboxProject.projectSlug}
         startIndex={lightboxProject.startIndex}
         onClose={handleLightboxClose}
       />

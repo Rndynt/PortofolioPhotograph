@@ -240,10 +240,20 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // Project Images routes
-  app.get("/api/projects/:projectId/images", async (req, res) => {
+  app.get("/api/projects/:projectIdOrSlug/images", async (req, res) => {
     try {
-      const { projectId } = req.params;
-      const images = await storage.getProjectImages(projectId);
+      const { projectIdOrSlug } = req.params;
+      
+      let project = await storage.getProjectById(projectIdOrSlug);
+      if (!project) {
+        project = await storage.getProjectBySlug(projectIdOrSlug);
+      }
+      
+      if (!project) {
+        return res.status(404).json({ message: "Project not found" });
+      }
+      
+      const images = await storage.getProjectImages(project.id);
       res.json(images);
     } catch (error) {
       res.status(500).json({ message: "Failed to fetch project images" });

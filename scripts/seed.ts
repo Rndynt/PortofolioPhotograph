@@ -26,7 +26,7 @@ async function seed() {
           name: "Pre/Post Wedding",
           slug: "prepostwed",
           description: "Timeless Elegance",
-          basePrice: 5000000,
+          basePrice: 1250000,
           isActive: true,
           sortOrder: 1,
         },
@@ -34,7 +34,7 @@ async function seed() {
           name: "Bride Wedding Event",
           slug: "wedding",
           description: "Timeless & Memorable",
-          basePrice: 5000000,
+          basePrice: 1777000,
           isActive: true,
           sortOrder: 2,
         },
@@ -42,7 +42,7 @@ async function seed() {
           name: "Graduation",
           slug: "graduation",
           description: "Graduation",
-          basePrice: 5000000,
+          basePrice: 750000,
           isActive: true,
           sortOrder: 3,
         },
@@ -139,7 +139,7 @@ async function seed() {
       .returning();
     
     // Insert price tiers for Portrait
-    const portraitTiers = await db
+    /*const portraitTiers = await db
       .insert(priceTiers)
       .values([
         {
@@ -183,7 +183,7 @@ async function seed() {
         },
       ])
       .returning();
-
+    */
     console.log("✅ Created price tiers for all categories");
 
     console.log("📸 Seeding projects...");
@@ -240,12 +240,12 @@ async function seed() {
     console.log("✅ Created wedding project with 5 images");
 
     // Insert portrait project (unpublished)
-    const [portraitProject] = await db
+    const [graduationProject] = await db
       .insert(projects)
       .values({
         title: "Johnson Family Portrait",
         slug: "johnson-family-portrait",
-        categoryId: portraitCategory.id,
+        categoryId: graduationCategory.id,
         clientName: "The Johnson Family",
         happenedAt: "2024-10-01",
         mainImageUrl: "/attached_assets/stock_images/professional_portrai_03ca58cd.jpg",
@@ -256,19 +256,19 @@ async function seed() {
     // Insert portrait project images
     await db.insert(projectImages).values([
       {
-        projectId: portraitProject.id,
+        projectId: graduationProject.id,
         url: "/attached_assets/stock_images/professional_portrai_2cee816f.jpg",
         caption: "Family group shot",
         sortOrder: 1,
       },
       {
-        projectId: portraitProject.id,
+        projectId: graduationProject.id,
         url: "/attached_assets/stock_images/professional_portrai_428c14cd.jpg",
         caption: "Individual portraits",
         sortOrder: 2,
       },
       {
-        projectId: portraitProject.id,
+        projectId: graduationProject.id,
         url: "/attached_assets/stock_images/professional_portrai_4a5b38db.jpg",
         caption: "Candid moments",
         sortOrder: 3,

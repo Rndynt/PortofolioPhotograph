@@ -275,7 +275,6 @@ export default function OrderPage() {
                             </SelectTrigger>
                           </FormControl>
                           <SelectContent>
-                            <SelectItem value="" data-testid="option-tier-base">Base Price</SelectItem>
                             {tiers?.map((tier) => (
                               <SelectItem key={tier.id} value={tier.id} data-testid={`option-tier-${tier.id}`}>
                                 {tier.name} - {formatIDR(tier.price)}
