@@ -11,6 +11,8 @@ import {
   insertProjectImageSchema,
   insertOrderSchema,
   projectImages,
+  orders,
+  projects,
 } from "@shared/schema";
 import { z } from "zod";
 import { eq, sql } from "drizzle-orm";
@@ -40,6 +42,13 @@ function hashCode(str: string): number {
     hash = hash & hash;
   }
   return hash;
+}
+
+function generateSlug(text: string): string {
+  return text
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-+|-+$/g, '');
 }
 
 export async function registerRoutes(app: Express): Promise<Server> {
@@ -369,6 +378,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const validatedData = createOrderSchema.parse(req.body);
       const { categoryId, priceTierId, customerName, email, phone, notes } = validatedData;
       
+      // Fetch category first (needed for project creation)
+      const category = await storage.getCategoryById(categoryId);
+      if (!category) {
+        return res.status(400).json({ message: "Category not found" });
+      }
+      
       let totalPrice: number;
       let itemName: string;
       
@@ -387,33 +402,49 @@ export async function registerRoutes(app: Express): Promise<Server> {
         totalPrice = tier.price;
         itemName = tier.name;
       } else {
-        const category = await storage.getCategoryById(categoryId);
-        if (!category) {
-          return res.status(400).json({ message: "Category not found" });
-        }
         totalPrice = category.basePrice;
         itemName = category.name;
       }
       
       const dpAmount = computeDpAmount(totalPrice, 30);
       
-      // Create order first
-      const order = await storage.createOrder({
-        categoryId,
-        priceTierId: priceTierId || null,
-        customerName,
-        email,
-        phone,
-        notes: notes || null,
-        status: "PENDING",
-        totalPrice,
-        dpPercent: 30,
-        dpAmount,
+      // Create order and project in a transaction
+      const { order, project } = await db.transaction(async (tx) => {
+        const [newOrder] = await tx
+          .insert(orders)
+          .values({
+            categoryId,
+            priceTierId: priceTierId || null,
+            customerName,
+            email,
+            phone,
+            notes: notes || null,
+            status: "PENDING",
+            totalPrice,
+            dpPercent: 30,
+            dpAmount,
+          })
+          .returning();
+        
+        const [newProject] = await tx
+          .insert(projects)
+          .values({
+            orderId: newOrder.id,
+            title: `${category.name} - ${customerName}`,
+            slug: generateSlug(`${category.name}-${customerName}-${Date.now()}`),
+            categoryId: categoryId,
+            clientName: customerName,
+            mainImageUrl: "https://images.unsplash.com/photo-1492691527719-9d1e07e534b4",
+            isPublished: false,
+          })
+          .returning();
+        
+        return { order: newOrder, project: newProject };
       });
       
       const midtransOrderId = generateOrderId(order.id);
       
-      // Try to create Snap transaction, delete order if it fails
+      // Try to create Snap transaction, delete order and project if it fails
       let snapTransaction;
       try {
         snapTransaction = await createSnapTransaction({
@@ -436,7 +467,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
           ],
         });
       } catch (midtransError) {
-        // Delete orphaned order if Midtrans fails
+        // Delete both order and project if Midtrans fails
+        await storage.deleteProject(project.id);
         await storage.deleteOrder(order.id);
         console.error("Midtrans transaction creation failed:", midtransError);
         return res.status(500).json({ message: "Payment system error: Failed to create payment transaction" });
@@ -451,6 +483,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       
       res.status(201).json({
         orderId: order.id,
+        projectId: project.id,
         snapToken: snapTransaction.token,
         redirect_url: snapTransaction.redirect_url,
       });
