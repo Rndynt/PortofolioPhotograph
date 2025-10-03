@@ -1,0 +1,172 @@
+You are a senior TypeScript/Node engineer working inside this repository: https://github.com/Rndynt/PortofolioPhotograph (branch: with-dashboard). Execute work systematically, keep changes typed, validated with Zod, and non-duplicative. Provide deep analysis, small focused commits, and update docs as you go.
+
+================================================================================
+CONTEXT (do NOT re-implement what already exists)
+• Phase 2 backend is DONE: PostgreSQL + Drizzle schema & seeds; full APIs for categories, price_tiers, projects (+images with ≤7 cap), orders (+payments); Midtrans Snap at POST /api/orders; webhook with signature verification + idempotency; order PATCH whitelisting; dynamic public home page already present.  
+• Treat existing code as the single source of truth. If you find parallel/duplicated logic, consolidate it—do not create copies.
+
+================================================================================
+OBJECTIVES (this iteration)
+1) Scheduling system to prevent photographer double-booking using sessions & assignments.  
+2) Auto-create a minimal Project for every Order (online or offline), linked 1:1, while still allowing manual Projects without Orders (for historical/backfill).  
+3) Admin flow for Offline Orders (no Midtrans), including manual payment records.  
+4) UI wiring in /dashboard-admin to schedule sessions, assign photographers, view calendars, and manage orders smoothly.  
+5) Update Implementation Plan and docs so progress is auditable.  
+6) Keep /dashboard-admin accessible only by direct URL (no header/nav link).
+
+================================================================================
+NO-DUPLICATION POLICY
+• Before coding: scan existing routes (server/routes.ts), Netlify wrapper(s), Zod validators, and shared types.  
+• Re-use and extend existing modules; do not add parallel endpoints or a second router entry.  
+• Keep a single /api entry (Netlify function) that routes internally to handlers.
+
+================================================================================
+PHASE A — Audit & Plan (no code yet)
+1) Create/Update IMPLEMENTATION_PLAN.md with:
+   – Status board: Done / In Progress / Next  
+   – Duplication log: any duplicates found + consolidation decision  
+   – Task list (below) with [Implemented] / [Missing] / [Needs Fix] and file paths
+
+2) Confirm netlify.toml has the redirect:
+    [[redirects]]
+      from = "/api/*"
+      to = "/.netlify/functions/:splat"
+      status = 200
+
+3) Confirm /dashboard-admin is NOT linked from public header/nav/sitemap.
+
+================================================================================
+PHASE B — Data Model Extensions (Drizzle + raw SQL migration)
+A. Orders & Projects linkage and channels
+• Add to orders:
+  – channel: "ONLINE" | "OFFLINE" (default "ONLINE")  
+  – payment_provider: "midtrans" | "cash" | "bank_transfer" | ... (default "midtrans")  
+  – source: nullable text (e.g., "walk_in" | "whatsapp" | "instagram" | "referral")
+
+• Add to projects:
+  – orderId (nullable, unique, FK → orders.id, onDelete: set null)  
+    – allows: auto-project on every order, but manual projects can have orderId = NULL
+
+B. Scheduling tables
+• photographers: id, name, contact, isActive  
+• sessions: id, projectId (FK), orderId (nullable FK), startAt, endAt, location, notes, status ("PLANNED" | "CONFIRMED" | "DONE" | "CANCELLED")  
+• session_assignments: id, sessionId (FK), photographerId (FK)
+
+C. Prevent double booking (Postgres exclusion constraint)
+• In sessions, add a generated range column:
+    time_range = tstzrange(start_at, end_at, '[)')
+• Ensure extension:
+    CREATE EXTENSION IF NOT EXISTS btree_gist;
+• Exclusion constraint on session_assignments so the same photographer cannot have overlapping time_range:
+    ALTER TABLE session_assignments
+      ADD CONSTRAINT no_overlap_per_photographer
+      EXCLUDE USING gist (
+        photographer_id WITH =,
+        (SELECT s.time_range FROM sessions s WHERE s.id = session_assignments.session_id) WITH &&
+      );
+
+• Implement the above via a raw SQL migration in Drizzle (include safe down/rollback).
+
+================================================================================
+PHASE C — Service Logic (transactions & hooks)
+1) Auto-create Project for every Order (online/offline)
+• Modify POST /api/orders and the admin offline-create flow so that, inside a single DB transaction:
+  – Insert orders row (compute totals as done today; set channel/payment_provider/source)  
+  – Insert minimal projects row:
+      orderId = order.id
+      title = `${categoryName} - ${customerName}`
+      slug  = slugify(title + date)
+      categoryId from order (when present)
+      clientName from order
+      isPublished = false
+  – Commit; respond with { orderId, projectId, snapToken, redirect_url } for online, or { orderId, projectId } for offline
+
+2) Offline Orders
+• Either reuse POST /api/orders with channel='OFFLINE' and payment_provider='cash'|'bank_transfer', or add a dedicated /api/orders/offline endpoint.  
+• Implement manual payment creation: POST /api/orders/:id/payments with provider ('cash'/'bank_transfer') and status ('settlement'), persisted in payments.
+
+3) Sessions & Assignments
+• POST /api/sessions → create a session (projectId required; optional orderId), default status='PLANNED'.  
+• POST /api/sessions/:id/assign → assign a photographer inside a transaction; on exclusion violation, return 409 with "Photographer busy".  
+• GET /api/sessions?photographerId=&from=&to= → list for calendar views.  
+• PATCH /api/sessions/:id → update time/status/location/notes.  
+• GET/POST /api/photographers → minimal CRUD for photographers.
+
+4) Optional hook: Auto-session draft on Midtrans settlement
+• In webhook settlement, if the chosen package implies a session (e.g., 1h/4h), create a session draft when none exists. Keep this configurable.
+
+================================================================================
+PHASE D — UI (respect the repo’s current router; do not expose /dashboard-admin in nav)
+Admin (/dashboard-admin)
+• Orders
+  – Kanban board: PENDING → CONSULTATION → SESSION → FINISHING → DRIVE_LINK → DONE (+ CANCELLED)  
+  – Schedule Drawer on each card:
+      create/update Session (start/end/duration/location/notes)
+      Assign Photographer (only active; handle 409 conflict visually)
+      Show linked Project badge; open Project editor in a side panel
+  – Payments timeline: read-only from /api/orders/:id/payments
+
+• Scheduling Calendar
+  – Views: Per Photographer (day/week) and All  
+  – Drag to move/resize session → PATCH /api/sessions/:id; if conflict, show "Photographer busy"
+
+• Projects
+  – Keep current CRUD and 7-image UI cap; when linked, display "Order #<id>"
+
+• Pricing
+  – Keep categories + tiers management with IDR formatting and active toggles
+
+Public
+• Home (/) already exists; ensure it renders dynamic published projects and packages (categories + tiers) from APIs (leave as dynamic).  
+• Order (/order) already posts to /api/orders and opens Snap popup (keep working; read client key via import.meta.env).
+
+================================================================================
+PHASE E — Docs & Tests
+• FEATURES_OVERVIEW.md:
+  – Update ER/diagram: Orders (channel, provider, source) ↔ Projects (orderId?) + Scheduling tables  
+  – List new endpoints and include flow diagrams: online order, offline order, scheduling, conflict handling
+
+• README.md:
+  – How to run migrations (including raw SQL for btree_gist + exclusion constraint)  
+  – How to test offline order and manual payments  
+  – How to test scheduling conflicts (attempt overlapping assignment → expect 409)
+
+• UI_QA_CHECKLIST.md:
+  – Home shows dynamic packages & projects  
+  – /project/:slug shows up to 7 images  
+  – /order creates order and opens Snap (sandbox)  
+  – Webhook settlement advances status; admin sees movement to CONSULTATION  
+  – Admin can create session, assign FG, drag in calendar; conflicting drag shows error  
+  – Admin Projects: image cap enforced; Order badge displayed when linked  
+  – Admin Orders: Kanban to DONE; set driveLink at DRIVE_LINK stage  
+  – No public link to /dashboard-admin
+
+================================================================================
+TASK LIST (copy into IMPLEMENTATION_PLAN.md and keep updated)
+• [ ] Schema migration: orders (channel, payment_provider, source); projects.orderId (unique FK set null)  
+• [ ] Scheduling tables: photographers; sessions (+time_range); session_assignments + exclusion constraint (btree_gist)  
+• [ ] POST /api/orders: single TX to create Order + minimal Project; return {orderId, projectId, ...}  
+• [ ] Offline order flow + manual payment endpoint  
+• [ ] Sessions API: create/list/update; assign photographer with conflict handling  
+• [ ] Admin Orders: Kanban + Schedule Drawer (create session, assign FG, conflict UI)  
+• [ ] Scheduling Calendar: per-photographer & all; drag/resize; conflict handling  
+• [ ] Projects Admin: show Order badge; keep ≤7 images in UI  
+• [ ] Docs: FEATURES_OVERVIEW, README, UI_QA_CHECKLIST updated; ER snippet added  
+• [ ] E2E smoke: online (Snap) + offline (cash) + conflict attempt + Kanban to DONE
+
+================================================================================
+ACCEPTANCE CRITERIA (Definition of Done)
+1) Any newly created Order (online or offline) results in a linked minimal Project (projects.orderId = order.id), with one-to-one uniqueness enforced; manual Projects without orders continue to work (orderId NULL).  
+2) Offline Order can be created from Admin; manual payment can be recorded; status pipeline functions exactly as online.  
+3) Scheduling: sessions + assignments exist; assigning the same photographer to overlapping sessions fails at DB level (exclusion constraint) and returns 409; Admin can create/update sessions and assign photographers via Schedule Drawer and Calendar UI.  
+4) No duplication of routes/validators/types; single /api entry preserved. /dashboard-admin remains unlinked in public nav.  
+5) Docs updated; Implementation Plan checked off; clean, well-labeled commits.
+
+================================================================================
+IMPLEMENTATION NOTES
+• TypeScript strict; Zod on all inputs; consistent error model.  
+• Use raw SQL migrations for btree_gist + exclusion constraint; provide safe up/down.  
+• Maintain existing Midtrans env usage; never expose server key to client; client uses only VITE_MIDTRANS_CLIENT_KEY.  
+• Provide a tiny seed for photographers and a couple of example sessions to visualize the calendar quickly.
+
+Execute phases in order. If conflicts with existing code arise, refactor minimally and document the decision in the commit and in FEATURES_OVERVIEW.md.

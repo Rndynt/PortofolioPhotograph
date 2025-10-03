@@ -1,4 +1,4 @@
-# Implementation Plan - Phase 3: UI & Wiring
+# Implementation Plan - Phase 4: Scheduling & Offline Orders
 
 ## Status Board
 
@@ -6,9 +6,10 @@
 |-------|--------|-------------|
 | Phase 1 | ✅ Complete | Database Schema & Migrations |
 | Phase 2 | ✅ Complete | Backend API Endpoints & Payment Integration |
-| Phase 3 | 🟡 85% Complete | UI Implementation & Wiring |
+| Phase 3 | ✅ Complete | UI Implementation & Wiring |
+| Phase 4 | 🔄 In Progress | Scheduling System & Offline Orders |
 
-Last Updated: October 1, 2025
+Last Updated: October 3, 2025
 
 ## Duplication Log
 
@@ -20,345 +21,753 @@ The codebase maintains clean architecture with no duplication:
 |----------|--------|---------|
 | API Entry Point | ✅ Clean | Single `fetch` wrapper in `client/src/lib/queryClient.ts` |
 | Schema Module | ✅ Clean | Shared module at `shared/schema.ts` used by both frontend and backend |
-| Routes | ✅ Clean | No duplicate route implementations detected |
+| Routes | ✅ Clean | Single `registerRoutes` function in `server/routes.ts` |
 | Validators | ✅ Clean | Zod schemas defined once in shared/schema.ts, reused everywhere |
 | UI State Management | ✅ Clean | Consistent TanStack Query usage across all components |
+| Netlify Functions | ✅ Clean | Single entry point at `netlify/functions/api.ts` |
+
+**Consolidation Decisions:**
+- All new scheduling and offline order endpoints will be added to existing `server/routes.ts` (no parallel routers)
+- New schemas will extend `shared/schema.ts` (single source of truth)
+- Storage interface will be extended in existing `server/storage.ts` (no duplicate abstractions)
 
 ---
 
-## Task List - Phase 3 UI Implementation
+## Phase A - Audit & Plan ✅ COMPLETE
 
-### HOME PAGE (public `/`) - Dynamic Data Integration
+### Configuration Verification
+- [x] **Netlify Redirect** - VERIFIED: `netlify.toml` lines 23-26 redirect `/api/*` to `/.netlify/functions/api/:splat`
+- [x] **Admin Dashboard Access** - VERIFIED: No links to `/dashboard-admin` in `client/src/components/navigation.tsx` or any public components
+- [x] **Route Structure** - VERIFIED: Admin routes defined in `client/src/App.tsx` lines 20-25, separate from public routes
 
-#### ✅ Show project details on home page [Partially Implemented - Needs Minor Fix]
-- **Files**: 
-  - `client/src/components/portfolio-gallery.tsx` (lines 17-47)
-  - `client/src/pages/home.tsx` (imports static data)
-- **Status**: Gallery component correctly fetches from API with `published=true` filter
-- **Issue**: Home page still imports unused `portfolio-data.ts` file
-- **Solution**: Remove the import statement (non-functional issue, visual cleanup)
-- **Features Working**:
-  - ✅ Fetches published projects from `/api/projects?published=true`
-  - ✅ Filters by category (via getCategorySlug mapping)
-  - ✅ Displays project grid with mainImageUrl as thumbnail
-  - ✅ Navigation to `/project/:slug` on click (via lightbox)
-  - ✅ Loading states and error handling
-  - ✅ All test-ids in place (`skeleton-project-${i}`, `error-loading-projects`)
-
-#### ❌ Show package prices on home page [Missing - Implementation Required]
-- **Required Component**: New pricing/packages section
-- **Data Source**: GET `/api/categories?active=true` + nested tiers
-- **Requirements**:
-  - Display active categories with their basePrice
-  - Show price tiers if available for each category
-  - Each card/button routes to `/order?category=<id>&tier=<id?>`
-  - IDR currency formatting
-  - Responsive card grid layout matching design
-- **Suggested Location**: Between `<PortfolioGallery>` and `<AboutSection>` in home.tsx
-- **Test IDs Required**: `card-package-${categoryId}`, `button-book-${categoryId}`
+### Existing Architecture Analysis
+- [x] **Backend**: Express.js with TypeScript, single route registration in `server/routes.ts`
+- [x] **Database**: PostgreSQL with Drizzle ORM, schema in `shared/schema.ts`
+- [x] **Storage Layer**: Interface-based abstraction in `server/storage.ts`
+- [x] **Frontend**: React + TanStack Query + Wouter routing
+- [x] **Payment**: Midtrans Snap integration (online orders only)
+- [x] **Current Tables**: categories, price_tiers, projects, project_images, orders, payments, portfolio_images, contact_submissions
 
 ---
 
-### PROJECT DETAIL PAGE (public `/project/:slug`)
+## Phase B - Data Model Extensions 🔄 IN PROGRESS
 
-#### ✅ Create page for project with images [Fully Implemented]
-- **File**: `client/src/pages/project-detail.tsx` (207 lines)
-- **Status**: Complete and production-ready
-- **Features**:
-  - ✅ Fetches project by slug via `/api/projects/${slug}`
-  - ✅ Fetches category and images with proper loading states
-  - ✅ Displays mainImageUrl prominently
-  - ✅ Shows up to 7 additional images in grid (sorted by sortOrder)
-  - ✅ Metadata display: category name, clientName, happenedAt (Indonesian locale)
-  - ✅ Lightbox integration for fullscreen image viewing
-  - ✅ 404 handling with user-friendly alert
-  - ✅ Back navigation to gallery
-  - ✅ All test-ids in place:
-    - `error-loading-project`, `project-not-found`
-    - `link-back-home`, `text-project-title`
-    - `text-category`, `text-client`, `text-date`
-    - `image-main`, `image-additional-${index}`
+### Task List
 
----
+#### B.1: Orders & Projects Linkage ❌ NOT STARTED
+**File**: `shared/schema.ts`
 
-### ORDER FLOW (public `/order`)
+- [ ] Add to `orders` table:
+  - `channel`: enum("channel", ["ONLINE", "OFFLINE"]).default("ONLINE")
+  - `paymentProvider`: text("payment_provider").default("midtrans") // "midtrans" | "cash" | "bank_transfer"
+  - `source`: text("source") // nullable: "walk_in" | "whatsapp" | "instagram" | "referral"
 
-#### ✅ Create order form and payment page [Fully Implemented]
-- **File**: `client/src/pages/order.tsx` (400 lines)
-- **Status**: Complete with full Midtrans Snap integration
-- **Form Fields** (all validated with Zod):
-  - ✅ categoryId (required) - Dropdown with active categories
-  - ✅ priceTierId (optional) - Dynamic dropdown based on selected category
-  - ✅ customerName (required)
-  - ✅ email (required, email validation)
-  - ✅ phone (required)
-  - ✅ notes (optional, textarea)
-- **Payment Flow**:
-  - ✅ POST `/api/orders` creates order and receives `{ orderId, snapToken, redirect_url }`
-  - ✅ Loads Snap JS from `https://app.sandbox.midtrans.com/snap/snap.js`
-  - ✅ Uses `import.meta.env.VITE_MIDTRANS_CLIENT_KEY` for data-client-key
-  - ✅ Opens Snap popup with callbacks: onSuccess, onPending, onError, onClose
-  - ✅ Fallback to redirect_url if Snap not loaded
-- **Price Display**:
-  - ✅ Shows total price (tier or base price)
-  - ✅ Shows 30% down payment amount
-  - ✅ IDR currency formatting
-- **Result Pages**:
-  - ✅ Success page with confirmation message
-  - ✅ Pending page with instructions
-  - ✅ Error toast notifications
-- **Test IDs**:
-  - `select-category`, `option-category-${slug}`
-  - `select-tier`, `option-tier-${id}`, `option-tier-base`
-  - `input-name`, `input-email`, `input-phone`, `input-notes`
-  - `alert-price-summary`, `text-total-price`, `text-dp-amount`
-  - `button-submit-order`
-  - `card-payment-success`, `card-payment-pending`, `button-back-home`
+- [ ] Add to `projects` table:
+  - `orderId`: text("order_id").unique().references(() => orders.id, { onDelete: "set null" })
+  - This allows auto-project on every order, but manual projects can have orderId = NULL
 
----
+- [ ] Update insert schemas and types for both tables
 
-### ADMIN DASHBOARD (private `/dashboard-admin`)
+**Status**: [Missing]
 
-#### ✅ Create admin dashboard without navigation exposure [Fully Implemented]
-- **Files**: 
-  - `client/src/App.tsx` (lines 20-26) - Route configuration
-  - `client/src/pages/admin/layout.tsx` - Admin layout with sidebar
-- **Navigation Check**: 
-  - ✅ Verified NO link in `client/src/components/navigation.tsx`
-  - ✅ No sitemap or footer links found
-  - ✅ Routes accessible only via direct URL entry
-- **Layout Features**:
-  - Sidebar navigation between admin sections
-  - TooltipProvider integration
-  - Consistent styling with shadcn/ui
+#### B.2: Photographers Table ❌ NOT STARTED
+**File**: `shared/schema.ts`
 
-#### ✅ Build admin tool for project management [Fully Implemented]
-- **File**: `client/src/pages/admin/projects.tsx` (600 lines)
-- **Status**: Full CRUD with advanced features
-- **List View**:
-  - ✅ Search filter (title, clientName)
-  - ✅ Category filter dropdown
-  - ✅ Published status filter (all/published/unpublished)
-  - ✅ Table display with all project details
-- **Form Features**:
-  - ✅ Title field with auto-slug generation
-  - ✅ Slug field (editable, auto-generated from title)
-  - ✅ Category dropdown (linked to categories API)
-  - ✅ Client name (optional)
-  - ✅ Happened at date picker
-  - ✅ Main image URL input
-  - ✅ Is Published toggle switch
-  - ✅ Drive link field
-- **Image Manager**:
-  - ✅ Shows current project images with sortOrder
-  - ✅ Add new image with URL and caption
-  - ✅ **7 image limit enforced in UI** - displays remaining slots
-  - ✅ Delete images with confirmation
-  - ✅ Reorder images (sortOrder control)
-- **Actions**:
-  - ✅ Create new project
-  - ✅ Edit existing project
-  - ✅ Delete with confirmation dialog
-  - ✅ Publish/unpublish toggle
-- **Preview**:
-  - ✅ Live preview card showing mainImageUrl
-- **All test-ids in place**
+- [ ] Create `photographers` table:
+  ```typescript
+  export const photographers = pgTable("photographers", {
+    id: text("id").primaryKey().$defaultFn(() => cuid()),
+    name: text("name").notNull(),
+    contact: text("contact"), // phone or email
+    isActive: boolean("is_active").notNull().default(true),
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+  });
+  ```
 
-#### ✅ Build admin tool for pricing management [Fully Implemented]
-- **File**: `client/src/pages/admin/pricing.tsx` (725 lines)
-- **Status**: Full CRUD for categories and tiers
-- **Categories Management**:
-  - ✅ Table with name, slug, basePrice (IDR format), isActive, sortOrder
-  - ✅ Create/Edit dialog with form validation
-  - ✅ Auto-slug generation from name (editable)
-  - ✅ Base price input with IDR formatting
-  - ✅ Is Active toggle
-  - ✅ Sort order numeric input
-  - ✅ Description textarea (optional)
-  - ✅ Delete with confirmation
-- **Price Tiers Management**:
-  - ✅ Drill-down view per category
-  - ✅ Table showing tier name, price (IDR), description, status
-  - ✅ Create/Edit tier dialog
-  - ✅ Category association (FK validation)
-  - ✅ Tier name, price, description fields
-  - ✅ Is Active toggle
-  - ✅ Sort order control
-  - ✅ Delete with confirmation
-- **Features**:
-  - ✅ IDR currency formatting helper (formatIDR)
-  - ✅ Proper form validation with Zod
-  - ✅ Toast notifications for all actions
-  - ✅ All test-ids in place
+- [ ] Create insert schema: `insertPhotographerSchema`
+- [ ] Create types: `InsertPhotographer`, `Photographer`
 
-#### ✅ Build admin order tracking board [Fully Implemented]
-- **File**: `client/src/pages/admin/orders.tsx` (456 lines)
-- **Status**: Full Kanban with drag-and-drop
-- **Kanban Board**:
-  - ✅ 7 status columns: PENDING, CONSULTATION, SESSION, FINISHING, DRIVE_LINK, DONE, CANCELLED
-  - ✅ @dnd-kit/core for drag-and-drop functionality
-  - ✅ @dnd-kit/sortable for sortable items
-  - ✅ Drag order card to new column → PATCH `/api/orders/:id` with `{ status }`
-  - ✅ Visual feedback during drag (opacity, transitions)
-- **Order Cards**:
-  - ✅ Customer name
-  - ✅ Email
-  - ✅ Down payment amount (IDR formatted)
-  - ✅ Category and tier name
-  - ✅ Payment status badge (color-coded)
-  - ✅ Created date
-  - ✅ Test ID: `order-card-${orderId}`
-- **Detail Sheet/Drawer**:
-  - ✅ Opens on card click
-  - ✅ Customer info section with mailto/tel links
-  - ✅ Package summary (category, tier if selected)
-  - ✅ Price breakdown (total, DP %, DP amount)
-  - ✅ Payment timeline: Fetches from `/api/orders/:id/payments`
-    - Shows transaction ID, status, amount, paid date
-    - Color-coded status badges
-  - ✅ Quick actions:
-    - Copy order ID
-    - Copy customer email
-    - Copy payment link (if available)
-  - ✅ Set Drive Link action (enabled at DRIVE_LINK stage)
-    - Input field + Save button
-    - Updates via PATCH `/api/orders/:id` with `{ driveLink }`
-  - ✅ Manual status change dropdown (for edge cases)
-- **Features**:
-  - ✅ Real-time updates via TanStack Query invalidation
-  - ✅ Optimistic UI updates
-  - ✅ Error handling with toast notifications
-  - ✅ All test-ids in place
+**Status**: [Missing]
+
+#### B.3: Sessions Table with Time Range ❌ NOT STARTED
+**File**: `shared/schema.ts`
+
+- [ ] Create `sessionStatus` enum: "PLANNED" | "CONFIRMED" | "DONE" | "CANCELLED"
+
+- [ ] Create `sessions` table:
+  ```typescript
+  export const sessions = pgTable("sessions", {
+    id: text("id").primaryKey().$defaultFn(() => cuid()),
+    projectId: text("project_id").notNull().references(() => projects.id, { onDelete: "cascade" }),
+    orderId: text("order_id").references(() => orders.id, { onDelete: "set null" }), // nullable
+    startAt: timestamp("start_at").notNull(),
+    endAt: timestamp("end_at").notNull(),
+    location: text("location"),
+    notes: text("notes"),
+    status: sessionStatusEnum("status").notNull().default("PLANNED"),
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+    updatedAt: timestamp("updated_at").defaultNow().notNull(),
+  });
+  ```
+
+- [ ] Note: `time_range` tstzrange column will be added via raw SQL migration (see B.5)
+
+- [ ] Create insert schema and types
+
+**Status**: [Missing]
+
+#### B.4: Session Assignments Table ❌ NOT STARTED
+**File**: `shared/schema.ts`
+
+- [ ] Create `session_assignments` table:
+  ```typescript
+  export const sessionAssignments = pgTable("session_assignments", {
+    id: text("id").primaryKey().$defaultFn(() => cuid()),
+    sessionId: text("session_id").notNull().references(() => sessions.id, { onDelete: "cascade" }),
+    photographerId: text("photographer_id").notNull().references(() => photographers.id, { onDelete: "cascade" }),
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+  });
+  ```
+
+- [ ] Create insert schema and types
+
+**Status**: [Missing]
+
+#### B.5: Raw SQL Migration for Double-Booking Prevention ❌ NOT STARTED
+**File**: `migrations/001_scheduling_constraints.sql` (new file)
+
+- [ ] Create migration file with:
+  1. Enable btree_gist extension
+  2. Add time_range generated column to sessions
+  3. Add exclusion constraint to session_assignments
+
+- [ ] Migration content:
+  ```sql
+  -- Enable btree_gist extension for exclusion constraints
+  CREATE EXTENSION IF NOT EXISTS btree_gist;
+
+  -- Add time_range column to sessions (tstzrange generated from start_at and end_at)
+  ALTER TABLE sessions 
+    ADD COLUMN time_range tstzrange 
+    GENERATED ALWAYS AS (tstzrange(start_at, end_at, '[)')) STORED;
+
+  -- Create exclusion constraint on session_assignments
+  -- Prevents same photographer from having overlapping time ranges
+  ALTER TABLE session_assignments
+    ADD CONSTRAINT no_overlap_per_photographer
+    EXCLUDE USING gist (
+      photographer_id WITH =,
+      (SELECT s.time_range FROM sessions s WHERE s.id = session_assignments.session_id) WITH &&
+    );
+  ```
+
+- [ ] Document rollback:
+  ```sql
+  -- Down migration
+  ALTER TABLE session_assignments DROP CONSTRAINT IF EXISTS no_overlap_per_photographer;
+  ALTER TABLE sessions DROP COLUMN IF EXISTS time_range;
+  -- Note: btree_gist extension not dropped as it might be used elsewhere
+  ```
+
+- [ ] Run migration manually: `psql $DATABASE_URL -f migrations/001_scheduling_constraints.sql`
+
+**Status**: [Missing]
+
+#### B.6: Push Schema Changes ❌ NOT STARTED
+- [ ] Run `npm run db:push --force` after adding all Drizzle schema changes
+- [ ] Verify tables created successfully
+- [ ] Run raw SQL migration separately
+
+**Status**: [Missing]
 
 ---
 
-### DOCUMENTATION
+## Phase C - Service Logic (Transactions & Hooks) 🔄 IN PROGRESS
 
-#### ❌ Update FEATURES_OVERVIEW.md [Missing - To Be Created]
-- **Required Content**:
-  - UI route map (`/`, `/project/:slug`, `/order`, `/dashboard-admin/*`)
-  - Data flow diagrams (API → UI component → render)
-  - How UI consumes backend endpoints
-  - Component hierarchy
-  - State management strategy (TanStack Query)
-  - File structure explanation
+### Task List
 
-#### ❌ Update README.md [Missing - To Be Updated]
-- **Required Additions**:
-  - Environment variables section:
-    - `VITE_MIDTRANS_CLIENT_KEY` for client-side Snap integration
-    - `MIDTRANS_SERVER_KEY` for backend (already exists, needs documentation)
-    - `DATABASE_URL` for PostgreSQL
-  - Local development setup instructions:
-    1. Clone repository
-    2. Install dependencies: `npm install`
-    3. Create `.env` file with required variables
-    4. Push database schema: `npm run db:push`
-    5. (Optional) Seed database: `npx tsx scripts/seed.ts`
-    6. Start dev server: `npm run dev`
-  - E2E testing steps (see UI_QA_CHECKLIST.md)
-  - Deployment instructions for Netlify and Replit
+#### C.1: Auto-Create Project for Every Order ❌ NOT STARTED
+**File**: `server/routes.ts` (modify existing POST /api/orders)
 
-#### ❌ Create UI_QA_CHECKLIST.md [Missing - To Be Created]
-- **Required Manual Test Steps**:
-  1. Home page shows dynamic projects from DB (check with seed data)
-  2. Home page shows dynamic packages with prices
-  3. Click project card → navigates to detail page
-  4. Detail page shows up to 7 images
-  5. `/order` form validation works
-  6. `/order` creates order and opens Midtrans Snap popup
-  7. Simulate sandbox payment → verify webhook updates order/payment
-  8. Admin Projects: create/edit/delete/publish workflows
-  9. Admin Projects: image manager blocks 8th image
-  10. Admin Pricing: create category + tier → appears on home packages
-  11. Admin Orders: drag order across all statuses
-  12. Admin Orders: set driveLink at DRIVE_LINK stage
-  13. Verify NO header/nav link to `/dashboard-admin`
-  14. Test responsive layouts (mobile, tablet, desktop)
-  15. Test error states (network failures, 404s)
+Current logic:
+1. Validates request
+2. Gets price from tier or category
+3. Creates order
+4. Creates Midtrans Snap transaction
+5. Updates order with Snap token
+
+New logic (within transaction):
+1. Validates request
+2. Gets price from tier or category
+3. **Transaction start:**
+   - Create order with channel/payment_provider/source
+   - Create minimal project:
+     ```typescript
+     {
+       orderId: order.id,
+       title: `${categoryName} - ${customerName}`,
+       slug: slugify(`${categoryName}-${customerName}-${Date.now()}`),
+       categoryId: order.categoryId,
+       clientName: order.customerName,
+       mainImageUrl: "https://via.placeholder.com/800x600", // temporary placeholder
+       isPublished: false
+     }
+     ```
+   - Commit transaction
+4. Create Midtrans Snap transaction (outside transaction)
+5. Update order with Snap token
+
+**Response format** (updated):
+```typescript
+{
+  orderId: string,
+  projectId: string, // NEW
+  snapToken: string,
+  redirect_url: string
+}
+```
+
+**Implementation Notes**:
+- Use `db.transaction()` for atomic order + project creation
+- If Midtrans fails, transaction is already committed (order + project exist)
+- Use slugify helper (may need to install or create)
+- Delete orphaned order AND project if Midtrans fails
+
+**Status**: [Missing] - Requires modification of existing endpoint
+
+#### C.2: Offline Orders Endpoint ❌ NOT STARTED
+**File**: `server/routes.ts` (new endpoint)
+
+**Option 1**: Reuse POST /api/orders with `channel='OFFLINE'`
+- Pros: Single endpoint, less code duplication
+- Cons: Conditional logic for Midtrans vs manual payment
+
+**Option 2**: Create dedicated POST /api/orders/offline
+- Pros: Clear separation, simpler validation
+- Cons: Some code duplication
+
+**Recommended**: Option 1 (reuse with channel parameter)
+
+**Implementation**:
+- [ ] Add `channel` to createOrderSchema (default "ONLINE")
+- [ ] Add `paymentProvider` to createOrderSchema (default "midtrans")
+- [ ] Add `source` to createOrderSchema (optional)
+- [ ] Modify POST /api/orders logic:
+  ```typescript
+  if (channel === "OFFLINE") {
+    // Skip Midtrans, create order + project, return directly
+    return res.status(201).json({ orderId, projectId });
+  } else {
+    // Existing Midtrans flow
+  }
+  ```
+
+**Status**: [Missing]
+
+#### C.3: Manual Payment Records ❌ NOT STARTED
+**File**: `server/routes.ts` (new endpoint)
+
+**Endpoint**: POST /api/orders/:id/payments
+
+**Request Body**:
+```typescript
+{
+  provider: "cash" | "bank_transfer",
+  amount: number, // in IDR
+  notes?: string
+}
+```
+
+**Logic**:
+1. Validate order exists
+2. Create payment record:
+   ```typescript
+   {
+     orderId: order.id,
+     transactionId: `manual_${Date.now()}`,
+     provider,
+     type: "DOWN_PAYMENT", // or determine from amount
+     status: "settlement",
+     grossAmount: amount,
+     paidAt: new Date(),
+     rawNotifJson: { manual: true, notes }
+   }
+   ```
+3. Update order status: PENDING → CONSULTATION (if first payment)
+4. Update order paymentStatus: "settlement"
+
+**Status**: [Missing]
+
+#### C.4: Photographers CRUD ❌ NOT STARTED
+**File**: `server/routes.ts` + `server/storage.ts`
+
+**Endpoints**:
+- GET /api/photographers (list all)
+- GET /api/photographers/:id (get one)
+- POST /api/photographers (create)
+- PATCH /api/photographers/:id (update)
+- DELETE /api/photographers/:id (delete)
+
+**Storage Interface Additions**:
+```typescript
+getPhotographers(): Promise<Photographer[]>;
+getPhotographerById(id: string): Promise<Photographer | undefined>;
+createPhotographer(photographer: InsertPhotographer): Promise<Photographer>;
+updatePhotographer(id: string, photographer: Partial<InsertPhotographer>): Promise<Photographer | undefined>;
+deletePhotographer(id: string): Promise<void>;
+```
+
+**Status**: [Missing]
+
+#### C.5: Sessions CRUD ❌ NOT STARTED
+**File**: `server/routes.ts` + `server/storage.ts`
+
+**Endpoints**:
+- GET /api/sessions?photographerId=&from=&to= (list with filters)
+- GET /api/sessions/:id (get one)
+- POST /api/sessions (create)
+- PATCH /api/sessions/:id (update time/status/location/notes)
+- DELETE /api/sessions/:id (delete)
+
+**Storage Interface Additions**:
+```typescript
+getSessions(filters?: { photographerId?: string; from?: Date; to?: Date }): Promise<Session[]>;
+getSessionById(id: string): Promise<Session | undefined>;
+createSession(session: InsertSession): Promise<Session>;
+updateSession(id: string, session: Partial<InsertSession>): Promise<Session | undefined>;
+deleteSession(id: string): Promise<void>;
+```
+
+**Status**: [Missing]
+
+#### C.6: Session Assignment with Conflict Handling ❌ NOT STARTED
+**File**: `server/routes.ts` + `server/storage.ts`
+
+**Endpoint**: POST /api/sessions/:id/assign
+
+**Request Body**:
+```typescript
+{
+  photographerId: string
+}
+```
+
+**Logic**:
+1. Validate session and photographer exist
+2. Inside transaction:
+   - Check if assignment already exists
+   - Try to insert into session_assignments
+   - Catch exclusion constraint violation (23P01)
+   - Return 409 Conflict with message: "Photographer is busy during this time"
+3. Return 201 Created on success
+
+**Error Handling**:
+```typescript
+try {
+  // insert
+} catch (error) {
+  if (error.code === '23P01') { // exclusion_violation
+    return res.status(409).json({ 
+      message: "Photographer is busy during this time",
+      conflict: true
+    });
+  }
+  throw error;
+}
+```
+
+**Additional Endpoints**:
+- GET /api/sessions/:id/assignments (list photographers assigned to session)
+- DELETE /api/session-assignments/:id (remove assignment)
+
+**Storage Interface Additions**:
+```typescript
+assignPhotographerToSession(sessionId: string, photographerId: string): Promise<SessionAssignment>;
+getSessionAssignments(sessionId: string): Promise<SessionAssignment[]>;
+removeSessionAssignment(assignmentId: string): Promise<void>;
+```
+
+**Status**: [Missing]
+
+#### C.7: Optional Auto-Session on Settlement ❌ NOT STARTED
+**File**: `server/routes.ts` (modify POST /api/midtrans/webhook)
+
+**Logic** (after settlement):
+1. Check if order has a linked project
+2. Check if project already has sessions
+3. If no sessions and tier has duration info:
+   - Create draft session (status: "PLANNED")
+   - No photographer assigned yet
+
+**Status**: [Optional - Low Priority]
+
+---
+
+## Phase D - UI (Admin Dashboard) 🔄 IN PROGRESS
+
+### Task List
+
+#### D.1: Update Admin Orders Page - Schedule Drawer ❌ NOT STARTED
+**File**: `client/src/pages/admin/orders.tsx`
+
+**Current Features**:
+- Kanban board with drag-and-drop
+- Order detail sheet/drawer
+- Payment timeline
+- Drive link setting
+
+**New Features to Add**:
+
+**1. Schedule Session Section in Order Detail Drawer**
+- [ ] Add "Schedule" accordion/section in drawer
+- [ ] Show existing sessions for the order's project:
+  - Session date/time
+  - Duration (calculated from startAt/endAt)
+  - Location
+  - Status badge
+  - Assigned photographers (names)
+- [ ] "Create Session" button → opens session form dialog
+- [ ] Session form fields:
+  - Date picker (startAt date)
+  - Start time (HH:mm)
+  - Duration (select: 1h, 2h, 4h, 8h, or custom)
+  - End time (auto-calculated or manual)
+  - Location (text input)
+  - Notes (textarea)
+- [ ] "Assign Photographer" button for each session
+  - Dropdown of active photographers
+  - On selection: POST /api/sessions/:id/assign
+  - Handle 409 conflict: show error toast "Photographer is busy at this time"
+- [ ] Show linked project badge with click → open project in new tab or side panel
+
+**Status**: [Missing]
+
+#### D.2: Calendar View for Scheduling ❌ NOT STARTED
+**File**: `client/src/pages/admin/calendar.tsx` (new file)
+
+**Features**:
+- [ ] Add new route: `/dashboard-admin/calendar` in `App.tsx`
+- [ ] Add "Calendar" tab to admin layout
+- [ ] View modes:
+  - Per photographer (select dropdown)
+  - All photographers (combined view)
+  - Day view
+  - Week view
+- [ ] Display sessions as blocks on calendar
+  - Color-coded by status (PLANNED, CONFIRMED, DONE, CANCELLED)
+  - Show session time, location, project name, photographer names
+- [ ] Drag to move session (update startAt/endAt)
+  - PATCH /api/sessions/:id
+  - Handle 409 conflict if photographer becomes busy
+- [ ] Drag to resize session (update endAt)
+  - Same conflict handling
+- [ ] Click session → opens detail popover:
+  - Session info
+  - Link to project
+  - Link to order
+  - Edit button → opens session form
+  - Delete button → confirmation dialog
+
+**Libraries to Consider**:
+- `@fullcalendar/react` or `react-big-calendar` or build custom with date-fns
+- Integrate with existing DnD library (@dnd-kit)
+
+**Status**: [Missing - Significant Work]
+
+#### D.3: Projects Admin - Show Order Badge ❌ NOT STARTED
+**File**: `client/src/pages/admin/projects.tsx`
+
+**Changes**:
+- [ ] Fetch projects with orderId field
+- [ ] In project list table, add "Order" column:
+  - If orderId exists: Show badge with order ID
+  - Badge click → navigate to orders page and open that order's drawer
+- [ ] In project detail/edit dialog:
+  - Show "Linked Order" badge at top
+  - Badge click → same navigation
+
+**Status**: [Missing - Small Change]
+
+#### D.4: Offline Order Form ❌ NOT STARTED
+**File**: `client/src/pages/admin/orders.tsx` or new component
+
+**Options**:
+1. Add "Create Offline Order" button in admin orders page
+2. Create dedicated admin form (similar to public /order but with more fields)
+
+**Form Fields**:
+- [ ] All fields from public order form (category, tier, customer info)
+- [ ] Additional fields:
+  - Channel: "OFFLINE" (fixed)
+  - Payment Provider: select (cash, bank_transfer, etc.)
+  - Source: text input (walk_in, whatsapp, instagram, referral)
+- [ ] Submit → POST /api/orders with channel="OFFLINE"
+- [ ] After creation:
+  - Show success message with orderId and projectId
+  - Option to immediately add manual payment
+  - Navigate to order detail
+
+**Status**: [Missing]
+
+#### D.5: Manual Payment Form ❌ NOT STARTED
+**File**: Component in admin orders page
+
+**Features**:
+- [ ] "Add Manual Payment" button in order detail drawer
+- [ ] Form fields:
+  - Provider: select (cash, bank_transfer, etc.)
+  - Amount: number input (IDR)
+  - Notes: textarea
+- [ ] Submit → POST /api/orders/:id/payments
+- [ ] Refresh payment timeline after success
+
+**Status**: [Missing]
+
+#### D.6: Photographers Management Page ❌ NOT STARTED
+**File**: `client/src/pages/admin/photographers.tsx` (new file)
+
+**Features**:
+- [ ] Add route: `/dashboard-admin/photographers` in `App.tsx`
+- [ ] Add "Photographers" tab to admin layout
+- [ ] List table with columns:
+  - Name
+  - Contact
+  - Active status (toggle)
+  - Actions (edit, delete)
+- [ ] Create/Edit dialog with form
+- [ ] Delete confirmation dialog
+
+**Status**: [Missing]
+
+---
+
+## Phase E - Documentation & Tests 🔄 IN PROGRESS
+
+### Task List
+
+#### E.1: Update FEATURES_OVERVIEW.md ❌ NOT STARTED
+**File**: `FEATURES_OVERVIEW.md` (create new)
+
+**Required Content**:
+- [ ] **Updated ER Diagram**:
+  - Orders (channel, paymentProvider, source)
+  - Projects (orderId)
+  - Photographers
+  - Sessions (time_range)
+  - SessionAssignments (with exclusion constraint notation)
+- [ ] **New Endpoint Documentation**:
+  - Photographers CRUD
+  - Sessions CRUD
+  - Session assignment with conflict handling
+  - Manual payments
+  - Offline orders
+- [ ] **Flow Diagrams**:
+  - Online order flow (with auto-project creation)
+  - Offline order flow (with manual payment)
+  - Scheduling flow (create session → assign photographer → handle conflict)
+  - Conflict resolution (exclusion constraint explanation)
+- [ ] **UI Route Map Update**:
+  - Add `/dashboard-admin/calendar`
+  - Add `/dashboard-admin/photographers`
+
+**Status**: [Missing]
+
+#### E.2: Update README.md ❌ NOT STARTED
+**File**: `README.md`
+
+**Required Additions**:
+- [ ] **Migration Instructions**:
+  - How to run Drizzle schema push
+  - How to run raw SQL migration for btree_gist + exclusion constraint
+  - Order of operations (schema first, then SQL migration)
+- [ ] **Testing Offline Orders**:
+  - Navigate to `/dashboard-admin/orders`
+  - Click "Create Offline Order"
+  - Fill form with channel="OFFLINE"
+  - Add manual payment
+  - Verify order status pipeline
+- [ ] **Testing Scheduling Conflicts**:
+  - Create session for Project A (e.g., 2pm-4pm)
+  - Assign Photographer John
+  - Create overlapping session for Project B (e.g., 3pm-5pm)
+  - Try to assign Photographer John → expect 409 error
+  - Verify error message displays in UI
+- [ ] **Seed Data for Photographers**:
+  - Document how to create test photographers
+  - Example queries or seed script
+
+**Status**: [Missing]
+
+#### E.3: Create UI_QA_CHECKLIST.md ❌ NOT STARTED
+**File**: `UI_QA_CHECKLIST.md` (create new)
+
+**Required Test Cases**:
+
+**Phase 3 Tests** (already working):
+- [ ] Home shows dynamic packages & projects
+- [ ] /project/:slug shows up to 7 images
+- [ ] /order creates order and opens Snap (sandbox)
+- [ ] Webhook settlement advances status; admin sees movement to CONSULTATION
+- [ ] Admin Projects: image cap enforced; all CRUD works
+- [ ] Admin Pricing: categories + tiers management works
+- [ ] Admin Orders: Kanban to DONE; driveLink setting works
+- [ ] No public link to /dashboard-admin
+
+**Phase 4 New Tests**:
+- [ ] **Order + Project Linkage**:
+  - Create online order → verify project auto-created
+  - Check project has orderId field populated
+  - Verify 1:1 uniqueness (one project per order)
+- [ ] **Offline Orders**:
+  - Create offline order from admin
+  - Verify no Midtrans interaction
+  - Add manual cash payment
+  - Verify status advances to CONSULTATION
+  - Verify payment appears in timeline
+- [ ] **Photographers Management**:
+  - Create photographer via admin
+  - Edit photographer details
+  - Toggle active status
+  - Delete photographer
+- [ ] **Session Creation**:
+  - Create session for a project
+  - Set start/end time, location, notes
+  - Verify session appears in order drawer
+- [ ] **Photographer Assignment**:
+  - Assign photographer to session
+  - Verify success toast
+- [ ] **Conflict Handling**:
+  - Create two overlapping sessions
+  - Assign same photographer to both
+  - Second assignment → verify 409 error
+  - Verify error message: "Photographer is busy at this time"
+- [ ] **Calendar View**:
+  - View calendar with sessions displayed
+  - Switch between photographers
+  - Drag session to new time
+  - Verify update persists
+  - Drag to create conflict → verify error
+- [ ] **Project-Order Badge**:
+  - Open admin projects
+  - Find project with orderId
+  - Verify order badge displays
+  - Click badge → navigate to order
+
+**Status**: [Missing]
+
+#### E.4: Create Seed Script for Photographers ❌ NOT STARTED
+**File**: `scripts/seed-photographers.ts` (new file)
+
+**Content**:
+```typescript
+import { db } from "../server/db";
+import { photographers } from "../shared/schema";
+
+async function seedPhotographers() {
+  const testPhotographers = [
+    { name: "John Doe", contact: "+62812345678", isActive: true },
+    { name: "Jane Smith", contact: "+62823456789", isActive: true },
+    { name: "Bob Wilson", contact: "+62834567890", isActive: false },
+  ];
+  
+  for (const photographer of testPhotographers) {
+    await db.insert(photographers).values(photographer);
+  }
+  
+  console.log("✅ Seeded photographers");
+}
+
+seedPhotographers().catch(console.error);
+```
+
+**Status**: [Missing]
 
 ---
 
 ## Environment Variables
 
 ### Backend (Already Configured)
-- ✅ `DATABASE_URL` - PostgreSQL connection string (Replit provisioned)
-- ⚠️ `MIDTRANS_SERVER_KEY` - Required for order creation (user must provide)
-- ⚠️ `MIDTRANS_CLIENT_KEY` - Required for Snap (user must provide)
+- ✅ `DATABASE_URL` - PostgreSQL connection string
+- ✅ `MIDTRANS_SERVER_KEY` - For order creation (required by user)
+- ✅ `MIDTRANS_CLIENT_KEY` - For Snap integration (required by user)
 
-### Frontend (Required Setup)
-- ❌ `VITE_MIDTRANS_CLIENT_KEY` - Must be added to `.env` for Snap JS
-  - **Current Implementation**: `import.meta.env.VITE_MIDTRANS_CLIENT_KEY` in order.tsx line 93
-  - **Action Required**: Create `.env.example` file documenting this variable
+### No New Environment Variables Required for Phase 4
 
 ---
 
-## Netlify Configuration
+## Acceptance Criteria (Definition of Done)
 
-✅ **VERIFIED**: `netlify.toml` has correct `/api/*` redirect
-- **File**: `netlify.toml` (lines 14-17)
-- **Redirect**: `/api/*` → `/.netlify/functions/api/:splat` with status 200
-- **SPA Fallback**: All other routes → `/index.html` for client-side routing
+### Phase 4 Specific:
+- [ ] Any newly created Order (online or offline) results in a linked minimal Project (projects.orderId = order.id), with one-to-one uniqueness enforced
+- [ ] Manual Projects without orders continue to work (orderId NULL)
+- [ ] Offline Order can be created from Admin
+- [ ] Manual payment can be recorded for any order
+- [ ] Status pipeline functions exactly as online for offline orders
+- [ ] Scheduling: sessions + assignments exist in database
+- [ ] Assigning the same photographer to overlapping sessions fails at DB level (exclusion constraint) and returns 409
+- [ ] Admin can create/update sessions via Schedule Drawer
+- [ ] Admin can assign photographers with conflict handling UI
+- [ ] Calendar view displays sessions and allows drag-to-update
+- [ ] No duplication of routes/validators/types
+- [ ] Single /api entry preserved
+- [ ] /dashboard-admin remains unlinked in public nav
+- [ ] Docs updated (FEATURES_OVERVIEW, README, UI_QA_CHECKLIST)
+- [ ] Implementation Plan checked off
+- [ ] Clean, well-labeled commits
 
----
-
-## Remaining Implementation Tasks
-
-### High Priority
-1. ✅ ~~Audit complete codebase~~ - DONE
-2. ✅ ~~Create IMPLEMENTATION_PLAN.md~~ - DONE (this file)
-3. 🔄 Add pricing/packages section to home page - **REQUIRED**
-4. 🔄 Create `.env.example` file - **REQUIRED**
-5. 🔄 Create FEATURES_OVERVIEW.md - **REQUIRED**
-6. 🔄 Create UI_QA_CHECKLIST.md - **REQUIRED**
-7. 🔄 Update README.md with env vars and setup instructions - **REQUIRED**
-
-### Low Priority (Nice to Have)
-8. ⭕ Remove unused `client/src/lib/portfolio-data.ts` import from home.tsx - CLEANUP
-9. ⭕ Create seed script documentation if not exists
-10. ⭕ Add TypeScript strict mode enforcement
-11. ⭕ Add error boundaries to admin pages
-
----
-
-## Implementation Progress
-
-**Overall: 85% Complete**
-
-| Component | Progress | Status |
-|-----------|----------|--------|
-| Backend API (Phase 2) | 100% | ✅ Complete |
-| Project Detail Page | 100% | ✅ Complete |
-| Order Flow + Midtrans | 100% | ✅ Complete |
-| Admin Dashboard Structure | 100% | ✅ Complete |
-| Admin Projects Management | 100% | ✅ Complete |
-| Admin Pricing Management | 100% | ✅ Complete |
-| Admin Orders Kanban | 100% | ✅ Complete |
-| Home Page - Projects | 95% | 🟡 Minor cleanup |
-| Home Page - Pricing Section | 0% | ❌ Not started |
-| Documentation | 0% | ❌ Not started |
-| Environment Setup | 50% | 🟡 Partial |
+### General Requirements:
+- [ ] TypeScript strict mode maintained
+- [ ] Zod validation on all inputs
+- [ ] Consistent error model
+- [ ] No mock/placeholder data in production paths
+- [ ] Never expose server secrets to client
 
 ---
 
-## Definition of Done (Phase 3)
+## Implementation Order
 
-- [x] IMPLEMENTATION_PLAN.md accurately reflects verification results
-- [x] Home page (`/`) uses dynamic data for projects
-- [ ] Home page shows packages/pricing section with links to `/order`
-- [x] `/project/:slug` works with up to 7 images
-- [x] `/order` form opens Midtrans Snap and handles all payment states
-- [x] `/dashboard-admin` exists and is functional (Projects, Pricing, Orders)
-- [x] Admin dashboard remains unlinked from public navigation
-- [x] No duplicated schemas/routes/validators/UI modules
-- [x] Single `/api` entry point retained
-- [ ] FEATURES_OVERVIEW.md created
-- [ ] README.md updated
-- [ ] UI_QA_CHECKLIST.md created
-- [ ] `.env.example` created
-- [x] All test-ids in place for E2E testing
+1. **Phase B.1-B.4**: Schema extensions (orders, projects, photographers, sessions, session_assignments)
+2. **Phase B.5**: Raw SQL migration for btree_gist + exclusion constraint
+3. **Phase B.6**: Push schema changes to database
+4. **Phase C.1**: Modify POST /api/orders for auto-project creation
+5. **Phase C.2**: Add offline order support
+6. **Phase C.3**: Manual payment endpoint
+7. **Phase C.4**: Photographers CRUD (backend + storage)
+8. **Phase C.5**: Sessions CRUD (backend + storage)
+9. **Phase C.6**: Session assignment with conflict handling
+10. **Phase D.6**: Photographers management UI
+11. **Phase D.4**: Offline order form UI
+12. **Phase D.5**: Manual payment form UI
+13. **Phase D.3**: Project-order badge UI
+14. **Phase D.1**: Schedule drawer in orders page
+15. **Phase D.2**: Calendar view (most complex UI)
+16. **Phase E**: Documentation and testing
 
 ---
 
-*Last Updated: October 1, 2025*
-*Current Status: Phase 3 - 85% Complete, Ready for Final Implementation*
+## Progress Tracking
+
+**Overall: 0% Complete**
+
+| Component | Progress | Status | Priority |
+|-----------|----------|--------|----------|
+| Schema Extensions | 0% | ❌ Not Started | High |
+| Raw SQL Migration | 0% | ❌ Not Started | High |
+| Auto-Project Creation | 0% | ❌ Not Started | High |
+| Offline Orders Backend | 0% | ❌ Not Started | High |
+| Manual Payments Backend | 0% | ❌ Not Started | High |
+| Photographers CRUD Backend | 0% | ❌ Not Started | High |
+| Sessions CRUD Backend | 0% | ❌ Not Started | High |
+| Session Assignment Backend | 0% | ❌ Not Started | High |
+| Photographers Management UI | 0% | ❌ Not Started | Medium |
+| Offline Orders UI | 0% | ❌ Not Started | Medium |
+| Manual Payments UI | 0% | ❌ Not Started | Medium |
+| Project-Order Badge UI | 0% | ❌ Not Started | Low |
+| Schedule Drawer UI | 0% | ❌ Not Started | Medium |
+| Calendar View UI | 0% | ❌ Not Started | Low |
+| Documentation | 0% | ❌ Not Started | Medium |
+
+---
+
+*Last Updated: October 3, 2025*
+*Current Status: Phase 4 - Planning Complete, Ready for Implementation*

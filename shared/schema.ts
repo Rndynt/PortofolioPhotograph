@@ -7,6 +7,7 @@ import cuid from "cuid";
 export const orderStatusEnum = pgEnum("order_status", ["PENDING", "CONSULTATION", "SESSION", "FINISHING", "DRIVE_LINK", "DONE", "CANCELLED"]);
 export const paymentStatusEnum = pgEnum("payment_status", ["pending", "settlement", "deny", "expire", "cancel"]);
 export const paymentTypeEnum = pgEnum("payment_type", ["DOWN_PAYMENT", "FULL_PAYMENT"]);
+export const sessionStatusEnum = pgEnum("session_status", ["PLANNED", "CONFIRMED", "DONE", "CANCELLED"]);
 
 export const categories = pgTable("categories", {
   id: text("id").primaryKey().$defaultFn(() => cuid()),
@@ -42,6 +43,7 @@ export const projects = pgTable("projects", {
   mainImageUrl: text("main_image_url").notNull(),
   isPublished: boolean("is_published").notNull().default(false),
   driveLink: text("drive_link"),
+  orderId: text("order_id").unique().references(() => orders.id, { onDelete: "set null" }),
   createdAt: timestamp("created_at").defaultNow().notNull(),
   updatedAt: timestamp("updated_at").defaultNow().notNull(),
 });
@@ -84,6 +86,9 @@ export const orders = pgTable("orders", {
   snapRedirectUrl: text("snap_redirect_url"),
   paymentStatus: text("payment_status"),
   driveLink: text("drive_link"),
+  channel: text("channel").notNull().default("ONLINE"),
+  paymentProvider: text("payment_provider").notNull().default("midtrans"),
+  source: text("source"),
   createdAt: timestamp("created_at").defaultNow().notNull(),
   updatedAt: timestamp("updated_at").defaultNow().notNull(),
 });
@@ -138,6 +143,34 @@ export const contactSubmissions = pgTable("contact_submissions", {
   createdAt: timestamp("created_at").defaultNow(),
 });
 
+export const photographers = pgTable("photographers", {
+  id: text("id").primaryKey().$defaultFn(() => cuid()),
+  name: text("name").notNull(),
+  contact: text("contact"),
+  isActive: boolean("is_active").notNull().default(true),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+});
+
+export const sessions = pgTable("sessions", {
+  id: text("id").primaryKey().$defaultFn(() => cuid()),
+  projectId: text("project_id").notNull().references(() => projects.id, { onDelete: "cascade" }),
+  orderId: text("order_id").references(() => orders.id, { onDelete: "set null" }),
+  startAt: timestamp("start_at").notNull(),
+  endAt: timestamp("end_at").notNull(),
+  location: text("location"),
+  notes: text("notes"),
+  status: sessionStatusEnum("status").notNull().default("PLANNED"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+});
+
+export const sessionAssignments = pgTable("session_assignments", {
+  id: text("id").primaryKey().$defaultFn(() => cuid()),
+  sessionId: text("session_id").notNull().references(() => sessions.id, { onDelete: "cascade" }),
+  photographerId: text("photographer_id").notNull().references(() => photographers.id, { onDelete: "cascade" }),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+});
+
 export const insertCategorySchema = createInsertSchema(categories).omit({
   id: true,
   createdAt: true,
@@ -182,6 +215,22 @@ export const insertContactSubmissionSchema = createInsertSchema(contactSubmissio
   createdAt: true,
 });
 
+export const insertPhotographerSchema = createInsertSchema(photographers).omit({
+  id: true,
+  createdAt: true,
+});
+
+export const insertSessionSchema = createInsertSchema(sessions).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
+export const insertSessionAssignmentSchema = createInsertSchema(sessionAssignments).omit({
+  id: true,
+  createdAt: true,
+});
+
 export type InsertCategory = z.infer<typeof insertCategorySchema>;
 export type Category = typeof categories.$inferSelect;
 
@@ -205,3 +254,12 @@ export type PortfolioImage = typeof portfolioImages.$inferSelect;
 
 export type InsertContactSubmission = z.infer<typeof insertContactSubmissionSchema>;
 export type ContactSubmission = typeof contactSubmissions.$inferSelect;
+
+export type InsertPhotographer = z.infer<typeof insertPhotographerSchema>;
+export type Photographer = typeof photographers.$inferSelect;
+
+export type InsertSession = z.infer<typeof insertSessionSchema>;
+export type Session = typeof sessions.$inferSelect;
+
+export type InsertSessionAssignment = z.infer<typeof insertSessionAssignmentSchema>;
+export type SessionAssignment = typeof sessionAssignments.$inferSelect;
