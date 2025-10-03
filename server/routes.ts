@@ -49,6 +49,26 @@ const manualPaymentSchema = z.object({
   notes: z.string().optional()
 });
 
+const createSessionApiSchema = z.object({
+  projectId: z.string(),
+  orderId: z.string().optional().nullable(),
+  startAt: z.string().datetime(),
+  endAt: z.string().datetime(),
+  location: z.string().optional().nullable(),
+  notes: z.string().optional().nullable(),
+  status: z.enum(["PLANNED", "CONFIRMED", "DONE", "CANCELLED"]).default("PLANNED"),
+});
+
+const updateSessionApiSchema = z.object({
+  projectId: z.string().optional(),
+  orderId: z.string().optional().nullable(),
+  startAt: z.string().datetime().optional(),
+  endAt: z.string().datetime().optional(),
+  location: z.string().optional().nullable(),
+  notes: z.string().optional().nullable(),
+  status: z.enum(["PLANNED", "CONFIRMED", "DONE", "CANCELLED"]).optional(),
+}).partial();
+
 function hashCode(str: string): number {
   let hash = 0;
   for (let i = 0; i < str.length; i++) {
@@ -698,14 +718,21 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.post("/api/sessions", async (req, res) => {
     try {
-      const validatedData = insertSessionSchema.parse(req.body);
+      const validatedData = createSessionApiSchema.parse(req.body);
       
       // Validate endAt > startAt
       if (new Date(validatedData.endAt) <= new Date(validatedData.startAt)) {
         return res.status(400).json({ message: "End time must be after start time" });
       }
       
-      const session = await storage.createSession(validatedData);
+      // Transform to storage format with Date objects
+      const sessionData = {
+        ...validatedData,
+        startAt: new Date(validatedData.startAt),
+        endAt: new Date(validatedData.endAt),
+      };
+      
+      const session = await storage.createSession(sessionData);
       res.status(201).json(session);
     } catch (error) {
       if (error instanceof z.ZodError) {
@@ -717,7 +744,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.patch("/api/sessions/:id", async (req, res) => {
     try {
-      const validatedData = insertSessionSchema.partial().parse(req.body);
+      const validatedData = updateSessionApiSchema.parse(req.body);
       
       // If updating times, validate endAt > startAt
       if (validatedData.startAt || validatedData.endAt) {
@@ -734,7 +761,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
         }
       }
       
-      const session = await storage.updateSession(req.params.id, validatedData);
+      // Transform to storage format with Date objects
+      const sessionData: any = { ...validatedData };
+      if (validatedData.startAt) sessionData.startAt = new Date(validatedData.startAt);
+      if (validatedData.endAt) sessionData.endAt = new Date(validatedData.endAt);
+      
+      const session = await storage.updateSession(req.params.id, sessionData);
       if (!session) {
         return res.status(404).json({ message: "Session not found" });
       }
