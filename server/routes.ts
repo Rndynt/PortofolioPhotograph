@@ -10,9 +10,12 @@ import {
   insertProjectSchema,
   insertProjectImageSchema,
   insertOrderSchema,
+  insertPhotographerSchema,
+  insertSessionSchema,
   projectImages,
   orders,
   projects,
+  payments,
 } from "@shared/schema";
 import { z } from "zod";
 import { eq, sql } from "drizzle-orm";
@@ -26,12 +29,24 @@ const createOrderSchema = z.object({
   email: z.string().email(),
   phone: z.string().min(1),
   notes: z.string().optional(),
+  channel: z.enum(["ONLINE", "OFFLINE"]).default("ONLINE"),
+  paymentProvider: z.string().default("midtrans"),
+  source: z.string().optional(),
 });
 
 const updateOrderSchema = z.object({
   status: z.enum(["PENDING", "CONSULTATION", "SESSION", "FINISHING", "DRIVE_LINK", "DONE", "CANCELLED"]).optional(),
   notes: z.string().optional(),
   driveLink: z.string().optional(),
+});
+
+const manualPaymentSchema = z.object({
+  provider: z.enum(["cash", "bank_transfer", "midtrans"]).default("cash"),
+  status: z.enum(["pending", "settlement", "deny", "expire", "cancel"]).default("settlement"),
+  grossAmount: z.number().positive(),
+  paidAt: z.string().datetime().optional(),
+  type: z.enum(["DOWN_PAYMENT", "FULL_PAYMENT"]).default("DOWN_PAYMENT"),
+  notes: z.string().optional()
 });
 
 function hashCode(str: string): number {
@@ -369,14 +384,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.post("/api/orders", async (req, res) => {
     try {
-      // Environment variable guards
-      if (!process.env.MIDTRANS_SERVER_KEY || !process.env.MIDTRANS_CLIENT_KEY) {
-        return res.status(500).json({ message: "Payment system not configured" });
-      }
-
       // Validate request body
       const validatedData = createOrderSchema.parse(req.body);
-      const { categoryId, priceTierId, customerName, email, phone, notes } = validatedData;
+      const { categoryId, priceTierId, customerName, email, phone, notes, channel, paymentProvider, source } = validatedData;
       
       // Fetch category first (needed for project creation)
       const category = await storage.getCategoryById(categoryId);
@@ -423,6 +433,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
             totalPrice,
             dpPercent: 30,
             dpAmount,
+            channel,
+            paymentProvider,
+            source: source || null,
           })
           .returning();
         
@@ -441,6 +454,18 @@ export async function registerRoutes(app: Express): Promise<Server> {
         
         return { order: newOrder, project: newProject };
       });
+      
+      // Skip Midtrans for offline orders
+      if (channel === "OFFLINE") {
+        return res.status(201).json({ orderId: order.id, projectId: project.id });
+      }
+      
+      // Environment variable guards for online orders
+      if (!process.env.MIDTRANS_SERVER_KEY || !process.env.MIDTRANS_CLIENT_KEY) {
+        await storage.deleteProject(project.id);
+        await storage.deleteOrder(order.id);
+        return res.status(500).json({ message: "Payment system not configured" });
+      }
       
       const midtransOrderId = generateOrderId(order.id);
       
@@ -520,6 +545,215 @@ export async function registerRoutes(app: Express): Promise<Server> {
       res.json(payments);
     } catch (error) {
       res.status(500).json({ message: "Failed to fetch payments" });
+    }
+  });
+
+  app.post("/api/orders/:id/payments", async (req, res) => {
+    try {
+      const { id: orderId } = req.params;
+      const validatedData = manualPaymentSchema.parse(req.body);
+      
+      // Verify order exists
+      const order = await storage.getOrderById(orderId);
+      if (!order) {
+        return res.status(404).json({ message: "Order not found" });
+      }
+      
+      // Create payment record
+      const payment = await db.insert(payments).values({
+        orderId,
+        transactionId: `manual_${Date.now()}_${orderId.slice(0, 8)}`,
+        provider: validatedData.provider,
+        type: validatedData.type,
+        status: validatedData.status,
+        grossAmount: validatedData.grossAmount,
+        paidAt: validatedData.paidAt ? new Date(validatedData.paidAt) : new Date(),
+        rawNotifJson: { manual: true, notes: validatedData.notes || null }
+      }).returning();
+      
+      // If settlement and order is PENDING, advance to CONSULTATION
+      if (validatedData.status === "settlement" && order.status === "PENDING") {
+        await storage.updateOrder(orderId, { 
+          status: "CONSULTATION",
+          paymentStatus: "settlement"
+        });
+      }
+      
+      res.status(201).json(payment[0]);
+    } catch (error) {
+      if (error instanceof z.ZodError) {
+        return res.status(400).json({ message: "Invalid payment data", errors: error.errors });
+      }
+      res.status(500).json({ message: "Failed to create manual payment" });
+    }
+  });
+
+  // Photographers routes
+  app.get("/api/photographers", async (req, res) => {
+    try {
+      const { active } = req.query;
+      let photographersList = await storage.getPhotographers();
+      
+      if (active === "true") {
+        photographersList = photographersList.filter(p => p.isActive);
+      }
+      
+      res.json(photographersList);
+    } catch (error) {
+      res.status(500).json({ message: "Failed to fetch photographers" });
+    }
+  });
+
+  app.get("/api/photographers/:id", async (req, res) => {
+    try {
+      const photographer = await storage.getPhotographerById(req.params.id);
+      if (!photographer) {
+        return res.status(404).json({ message: "Photographer not found" });
+      }
+      res.json(photographer);
+    } catch (error) {
+      res.status(500).json({ message: "Failed to fetch photographer" });
+    }
+  });
+
+  app.post("/api/photographers", async (req, res) => {
+    try {
+      const validatedData = insertPhotographerSchema.parse(req.body);
+      const photographer = await storage.createPhotographer(validatedData);
+      res.status(201).json(photographer);
+    } catch (error) {
+      if (error instanceof z.ZodError) {
+        return res.status(400).json({ message: "Invalid photographer data", errors: error.errors });
+      }
+      res.status(500).json({ message: "Failed to create photographer" });
+    }
+  });
+
+  app.patch("/api/photographers/:id", async (req, res) => {
+    try {
+      const validatedData = insertPhotographerSchema.partial().parse(req.body);
+      const photographer = await storage.updatePhotographer(req.params.id, validatedData);
+      
+      if (!photographer) {
+        return res.status(404).json({ message: "Photographer not found" });
+      }
+      res.json(photographer);
+    } catch (error) {
+      if (error instanceof z.ZodError) {
+        return res.status(400).json({ message: "Invalid photographer data", errors: error.errors });
+      }
+      res.status(500).json({ message: "Failed to update photographer" });
+    }
+  });
+
+  app.delete("/api/photographers/:id", async (req, res) => {
+    try {
+      await storage.deletePhotographer(req.params.id);
+      res.status(204).send();
+    } catch (error) {
+      res.status(500).json({ message: "Failed to delete photographer" });
+    }
+  });
+
+  // Sessions routes
+  app.get("/api/sessions", async (req, res) => {
+    try {
+      const { photographerId, from, to, projectId, orderId } = req.query;
+      const filters: any = {};
+      
+      if (photographerId && typeof photographerId === "string") {
+        filters.photographerId = photographerId;
+      }
+      if (from && typeof from === "string") {
+        filters.from = new Date(from);
+      }
+      if (to && typeof to === "string") {
+        filters.to = new Date(to);
+      }
+      if (projectId && typeof projectId === "string") {
+        filters.projectId = projectId;
+      }
+      if (orderId && typeof orderId === "string") {
+        filters.orderId = orderId;
+      }
+      
+      const sessionsList = await storage.getSessions(filters);
+      res.json(sessionsList);
+    } catch (error) {
+      res.status(500).json({ message: "Failed to fetch sessions" });
+    }
+  });
+
+  app.get("/api/sessions/:id", async (req, res) => {
+    try {
+      const session = await storage.getSessionById(req.params.id);
+      if (!session) {
+        return res.status(404).json({ message: "Session not found" });
+      }
+      res.json(session);
+    } catch (error) {
+      res.status(500).json({ message: "Failed to fetch session" });
+    }
+  });
+
+  app.post("/api/sessions", async (req, res) => {
+    try {
+      const validatedData = insertSessionSchema.parse(req.body);
+      
+      // Validate endAt > startAt
+      if (new Date(validatedData.endAt) <= new Date(validatedData.startAt)) {
+        return res.status(400).json({ message: "End time must be after start time" });
+      }
+      
+      const session = await storage.createSession(validatedData);
+      res.status(201).json(session);
+    } catch (error) {
+      if (error instanceof z.ZodError) {
+        return res.status(400).json({ message: "Invalid session data", errors: error.errors });
+      }
+      res.status(500).json({ message: "Failed to create session" });
+    }
+  });
+
+  app.patch("/api/sessions/:id", async (req, res) => {
+    try {
+      const validatedData = insertSessionSchema.partial().parse(req.body);
+      
+      // If updating times, validate endAt > startAt
+      if (validatedData.startAt || validatedData.endAt) {
+        const existing = await storage.getSessionById(req.params.id);
+        if (!existing) {
+          return res.status(404).json({ message: "Session not found" });
+        }
+        
+        const newStart = validatedData.startAt ? new Date(validatedData.startAt) : new Date(existing.startAt);
+        const newEnd = validatedData.endAt ? new Date(validatedData.endAt) : new Date(existing.endAt);
+        
+        if (newEnd <= newStart) {
+          return res.status(400).json({ message: "End time must be after start time" });
+        }
+      }
+      
+      const session = await storage.updateSession(req.params.id, validatedData);
+      if (!session) {
+        return res.status(404).json({ message: "Session not found" });
+      }
+      
+      res.json(session);
+    } catch (error) {
+      if (error instanceof z.ZodError) {
+        return res.status(400).json({ message: "Invalid session data", errors: error.errors });
+      }
+      res.status(500).json({ message: "Failed to update session" });
+    }
+  });
+
+  app.delete("/api/sessions/:id", async (req, res) => {
+    try {
+      await storage.deleteSession(req.params.id);
+      res.status(204).send();
+    } catch (error) {
+      res.status(500).json({ message: "Failed to delete session" });
     }
   });
 

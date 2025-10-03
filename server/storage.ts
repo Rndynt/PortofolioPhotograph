@@ -15,6 +15,12 @@ import {
   type InsertPortfolioImage,
   type ContactSubmission,
   type InsertContactSubmission,
+  type Photographer,
+  type InsertPhotographer,
+  type Session,
+  type InsertSession,
+  type SessionAssignment,
+  type InsertSessionAssignment,
   type PaymentStatus,
   categories,
   priceTiers,
@@ -24,9 +30,12 @@ import {
   payments,
   portfolioImages,
   contactSubmissions,
+  photographers,
+  sessions,
+  sessionAssignments,
 } from "@shared/schema";
 import { db } from "./db";
-import { eq, and, like, or } from "drizzle-orm";
+import { eq, and, like, or, gte, lte, inArray } from "drizzle-orm";
 
 export interface IStorage {
   // Categories
@@ -86,6 +95,25 @@ export interface IStorage {
   // Contact (backward compatibility)
   createContactSubmission(submission: InsertContactSubmission): Promise<ContactSubmission>;
   getContactSubmissions(): Promise<ContactSubmission[]>;
+
+  // Photographers
+  getPhotographers(): Promise<Photographer[]>;
+  getPhotographerById(id: string): Promise<Photographer | undefined>;
+  createPhotographer(photographer: InsertPhotographer): Promise<Photographer>;
+  updatePhotographer(id: string, photographer: Partial<InsertPhotographer>): Promise<Photographer | undefined>;
+  deletePhotographer(id: string): Promise<void>;
+
+  // Sessions
+  getSessions(filters?: { photographerId?: string; from?: Date; to?: Date; projectId?: string; orderId?: string }): Promise<Session[]>;
+  getSessionById(id: string): Promise<Session | undefined>;
+  createSession(session: InsertSession): Promise<Session>;
+  updateSession(id: string, session: Partial<InsertSession>): Promise<Session | undefined>;
+  deleteSession(id: string): Promise<void>;
+
+  // Session Assignments
+  assignPhotographerToSession(sessionId: string, photographerId: string): Promise<SessionAssignment>;
+  getSessionAssignments(sessionId: string): Promise<SessionAssignment[]>;
+  removeSessionAssignment(assignmentId: string): Promise<void>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -378,6 +406,131 @@ export class DatabaseStorage implements IStorage {
 
   async getContactSubmissions(): Promise<ContactSubmission[]> {
     return await db.select().from(contactSubmissions);
+  }
+
+  // Photographers
+  async getPhotographers(): Promise<Photographer[]> {
+    return await db.select().from(photographers);
+  }
+
+  async getPhotographerById(id: string): Promise<Photographer | undefined> {
+    const [photographer] = await db.select().from(photographers).where(eq(photographers.id, id));
+    return photographer || undefined;
+  }
+
+  async createPhotographer(insertPhotographer: InsertPhotographer): Promise<Photographer> {
+    const [photographer] = await db
+      .insert(photographers)
+      .values(insertPhotographer)
+      .returning();
+    return photographer;
+  }
+
+  async updatePhotographer(id: string, updateData: Partial<InsertPhotographer>): Promise<Photographer | undefined> {
+    const [photographer] = await db
+      .update(photographers)
+      .set(updateData)
+      .where(eq(photographers.id, id))
+      .returning();
+    return photographer || undefined;
+  }
+
+  async deletePhotographer(id: string): Promise<void> {
+    await db.delete(photographers).where(eq(photographers.id, id));
+  }
+
+  // Sessions
+  async getSessions(filters?: { photographerId?: string; from?: Date; to?: Date; projectId?: string; orderId?: string }): Promise<Session[]> {
+    if (!filters) {
+      return await db.select().from(sessions);
+    }
+
+    const conditions = [];
+    
+    if (filters.projectId) {
+      conditions.push(eq(sessions.projectId, filters.projectId));
+    }
+    
+    if (filters.orderId) {
+      conditions.push(eq(sessions.orderId, filters.orderId));
+    }
+    
+    if (filters.from) {
+      conditions.push(gte(sessions.startAt, filters.from));
+    }
+    
+    if (filters.to) {
+      conditions.push(lte(sessions.endAt, filters.to));
+    }
+    
+    if (filters.photographerId) {
+      const assignments = await db.select().from(sessionAssignments)
+        .where(eq(sessionAssignments.photographerId, filters.photographerId));
+      
+      const sessionIds = assignments.map(a => a.sessionId);
+      
+      if (sessionIds.length === 0) {
+        return [];
+      }
+      
+      conditions.push(inArray(sessions.id, sessionIds));
+    }
+
+    if (conditions.length === 0) {
+      return await db.select().from(sessions);
+    }
+
+    return await db.select().from(sessions).where(and(...conditions));
+  }
+
+  async getSessionById(id: string): Promise<Session | undefined> {
+    const [session] = await db.select().from(sessions).where(eq(sessions.id, id));
+    return session || undefined;
+  }
+
+  async createSession(insertSession: InsertSession): Promise<Session> {
+    const [session] = await db
+      .insert(sessions)
+      .values(insertSession)
+      .returning();
+    return session;
+  }
+
+  async updateSession(id: string, updateData: Partial<InsertSession>): Promise<Session | undefined> {
+    const [session] = await db
+      .update(sessions)
+      .set({ ...updateData, updatedAt: new Date() })
+      .where(eq(sessions.id, id))
+      .returning();
+    return session || undefined;
+  }
+
+  async deleteSession(id: string): Promise<void> {
+    await db.delete(sessions).where(eq(sessions.id, id));
+  }
+
+  // Session Assignments
+  async assignPhotographerToSession(sessionId: string, photographerId: string): Promise<SessionAssignment> {
+    try {
+      const [assignment] = await db
+        .insert(sessionAssignments)
+        .values({ sessionId, photographerId })
+        .returning();
+      return assignment;
+    } catch (error: any) {
+      if (error.code === '23P01') {
+        throw new Error('PHOTOGRAPHER_BUSY');
+      }
+      throw error;
+    }
+  }
+
+  async getSessionAssignments(sessionId: string): Promise<SessionAssignment[]> {
+    return await db.select().from(sessionAssignments).where(eq(sessionAssignments.sessionId, sessionId));
+  }
+
+  async removeSessionAssignment(assignmentId: string): Promise<void> {
+    await db.delete(sessionAssignments).where(eq(sessionAssignments.id, assignmentId));
   }
 }
 
