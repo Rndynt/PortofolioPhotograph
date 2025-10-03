@@ -1,0 +1,157 @@
+You are a senior TypeScript/Node engineer working **inside this repository**: https://github.com/Rndynt/PortofolioPhotograph (branch `with-dashboard`). Execute work **systematically**, keep changes **typed** (TS), **validated** (Zod), and **non-duplicative**. Provide deep analysis, focused commits, and update docs as you go.
+
+================================================================================
+CONTEXT (what’s already reported as DONE — do NOT re-implement)
+Back end Phase 2 was completed previously. In Phase 4, per the latest status you shared:
+✔ Add new details to order records  
+✔ Create table for photographer information  
+✔ Create table for session records  
+✔ Create table for session assignments  
+✔ Add database extension and constraint (btree_gist + exclusion)  
+✔ Apply schema changes to database  
+⏳ Create project automatically with order (NOT done)  
+⏳ Offline orders, manual payments, endpoints & UI (NOT done)  
+⏳ Photographers/session endpoints & admin UI (NOT done)  
+⏳ Schedule drawer, calendar view, docs & QA checklist (NOT done)
+
+Treat existing code as the **single source of truth**. If a feature already exists, **extend or refactor in place**; do **not** create parallel routers/endpoints/validators.
+
+================================================================================
+NON-DUPLICATION POLICY
+• Keep a **single `/api`** Netlify entry (Express wrapper if present).  
+• Reuse shared Zod schemas/types from `shared/` (or centralize them there now).  
+• If any duplicate handler/validator/type exists, **consolidate** and remove the extra.
+
+================================================================================
+PHASE A — Audit & Plan (DO THIS FIRST, no code changes)
+1) Update **`IMPLEMENTATION_PLAN.md`** with a matrix:
+   - **Done / In Progress / Next**  
+   - For each task below, mark **[Implemented] / [Missing] / [Needs Fix]** with **file paths**.  
+   - Add a **duplication log** (file A vs file B → merged into C).
+2) Confirm `netlify.toml` has the `/api/*` redirect.  
+3) Confirm **`/dashboard-admin` is not linked** in any public header/nav/sitemap.
+
+Deliverable for Phase A: A short bullet “Audit Summary” appended to `IMPLEMENTATION_PLAN.md`.
+
+================================================================================
+PHASE B — Verify Schema (only add what’s missing)
+Already reported as applied: photographers, sessions, session_assignments, btree_gist + exclusion. Now **verify**:
+1) `orders` has: `channel` (`ONLINE|OFFLINE`), `payment_provider` (`midtrans|cash|bank_transfer|...`), `source` (nullable).  
+2) `projects.orderId` exists, **nullable**, **unique**, FK → `orders.id` with **ON DELETE SET NULL**.  
+3) `sessions` has generated `time_range = tstzrange(start_at, end_at, '[)')`.  
+4) Exclusion constraint prevents **same photographer** overlapping time ranges.  
+If any item is missing, **create a migration** (raw SQL where needed) and apply it. Do not re-create what’s already present.
+
+Deliverable for Phase B: Migration files + `drizzle-kit` snapshot, and an update note in `FEATURES_OVERVIEW.md` (ERD delta).
+
+================================================================================
+PHASE C — Service Logic (transactions, endpoints)
+C.1 **Auto-create Project with every Order (online/offline)**
+• Modify `POST /api/orders` so within **one transaction**:
+  a) Insert order (compute totals; set `channel`, `payment_provider`, `source`)  
+  b) Insert **minimal project**:
+     - `orderId = order.id`
+     - `title = ${categoryName} - ${customerName}`
+     - `slug = slugify(title + currentDate)` (ensure uniqueness)
+     - `categoryId` (if present), `clientName`, `isPublished=false`
+  c) If online: create Midtrans Snap; **persist** `midtransOrderId`, `snapToken`, `redirect_url`
+  d) Commit; respond:
+     - Online → `201 { orderId, projectId, snapToken, redirect_url }`
+     - Offline → `201 { orderId, projectId }`
+• Validation: Zod schema for request; return **422** on validation errors.
+
+C.2 **Offline Order**
+• Reuse `POST /api/orders` with `channel='OFFLINE'` and `payment_provider='cash' | 'bank_transfer'` (no Midtrans call).  
+• Response includes `{ orderId, projectId }`.
+
+C.3 **Manual Payment Endpoint**
+• `POST /api/orders/:id/payments` (Zod): `{ provider: 'cash'|'bank_transfer', status: 'settlement'|'pending'|'deny'|'cancel'|'expire', grossAmount: number, paidAt?: string }`  
+• Insert into `payments`; if `status='settlement'` and order is `PENDING`, optionally auto-advance to `CONSULTATION` (config flag).  
+• Return updated payment timeline.
+
+C.4 **Photographers CRUD Endpoints**
+• `GET/POST /api/photographers`, `PATCH /api/photographers/:id`, `DELETE /api/photographers/:id` (soft delete or isActive toggle preferred).
+
+C.5 **Sessions CRUD Endpoints**
+• `GET /api/sessions?photographerId=&from=&to=`  
+• `POST /api/sessions` (create for a `projectId` and optional `orderId`)  
+• `PATCH /api/sessions/:id` (time/status/location/notes)  
+• **Server-side guard**: endAt > startAt; reasonable max duration.
+
+C.6 **Session Assignment with Conflict Handling**
+• `POST /api/sessions/:id/assign` → `{ photographerId }`  
+• Transaction: insert into `session_assignments`; if exclusion constraint hits, return **409 { code:'PHOTOGRAPHER_BUSY', message:'Photographer busy for this time range' }`.
+
+Deliverables for Phase C: New/updated routes in `server/routes.ts` (or equivalent), Zod schemas, and unit tests for conflict helper/DP calc if present.
+
+================================================================================
+PHASE D — UI (Wouter routes, shadcn/ui, TanStack Query)
+D.1 **Admin Orders** (`/dashboard-admin`)
+• Add **Schedule Drawer** on each order card:
+  - Create/update **Session** (start/end/duration/location/notes)
+  - **Assign Photographer** (dropdown shows active only; handle 409 by toast “Photographer busy”)
+  - Show **Project badge** with link to Project editor
+  - Read-only **Payment timeline**
+• Keep Kanban columns: `PENDING → CONSULTATION → SESSION → FINISHING → DRIVE_LINK → DONE (+ CANCELLED)`.
+
+D.2 **Scheduling Calendar**
+• Views: **Per Photographer** (day/week) and **All**.  
+• Drag to move/resize → `PATCH /api/sessions/:id`; if 409, revert and show error.
+
+D.3 **Projects Admin**
+• Show **Order badge** (`Order #<id>`) when `projects.orderId` is set.  
+• Keep ≤7 images UX cap as implemented.
+
+D.4 **Offline order form (Admin)**
+• Simple create-order form with `channel='OFFLINE'`, `payment_provider` select.  
+• After create, show link to **Manual Payment** form (below).
+
+D.5 **Manual payment form (Admin)**
+• Against an order, allow adding `payments` rows with provider/status/amount/paidAt (validated in UI).
+
+**Do not add any public header/nav link** to `/dashboard-admin`.
+
+Deliverables for Phase D: Components + routes, and a short GIF (optional) or screenshots referenced in `FEATURES_OVERVIEW.md`.
+
+================================================================================
+PHASE E — Docs & QA
+E.1 Update **`FEATURES_OVERVIEW.md`**:
+• ERD snippet (Orders↔Projects, Photographers/Sessions/Assignments).  
+• Endpoint table (new endpoints + request/response shapes).  
+• Flow diagrams: online order, offline order, scheduling & conflict.
+
+E.2 Update **`README.md`**:
+• How to run migrations (note raw SQL for btree_gist + exclusion).  
+• How to test **offline** orders and **manual** payments.  
+• How to test conflict: create two overlapping assignments for same FG → expect **409**.
+
+E.3 Add **`UI_QA_CHECKLIST.md`**:
+• Home shows dynamic packages & projects (already).  
+• `/project/:slug` shows ≤7 images.  
+• `/order` online create → Snap popup works (sandbox).  
+• Webhook settlement moves to CONSULTATION.  
+• Admin: create offline order → manual payment → pipeline.  
+• Admin: create session, assign FG, see calendar; attempt overlap → 409.  
+• Kanban to DONE, set driveLink at DRIVE_LINK.  
+• **No public link** to `/dashboard-admin`.
+
+E.4 Add **sample seed** for 2-3 photographers + a couple of sessions (optional).
+
+Deliverables for Phase E: Updated docs + seed.
+
+================================================================================
+ACCEPTANCE CRITERIA (Definition of Done)
+1) **Every new Order** (online/offline) auto-creates a **linked minimal Project** (`projects.orderId = order.id`, unique 1:1). Manual Projects (backfill) still work with `orderId = NULL`.  
+2) **Offline Order** flow exists (Admin) and can record **manual payments**; status pipeline behaves like online (optional auto-advance on settlement).  
+3) **Scheduling** is live: sessions + assignments; assigning an overlapping session for the same photographer fails with **409**; UI surfaces conflict clearly.  
+4) No duplicate routes/validators/types; single `/api` entry persists; `/dashboard-admin` remains unlinked publicly.  
+5) Docs updated; `IMPLEMENTATION_PLAN.md` reflects audit, statuses, and exactly what changed (file paths). Clean, well-labeled commits.
+
+================================================================================
+REPORTING FORMAT (post back in PR/commit or comment)
+• **Audit Summary** (what was already present; what was missing).  
+• **Files touched** (paths) grouped by Phase/Task.  
+• **Demo commands** (curl) for: create offline order, add manual payment, create session, assign photographer (conflict and success).  
+• **Known limitations** and “Next Up” (if any small items remain).
+
+Execute Phases A→E in order. If an existing implementation conflicts with this spec, refactor **minimally** and note the decision in the commit message and in `FEATURES_OVERVIEW.md`.

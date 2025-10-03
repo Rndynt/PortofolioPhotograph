@@ -11,6 +11,103 @@
 
 Last Updated: October 3, 2025
 
+---
+
+## 🔍 PHASE A AUDIT SUMMARY (October 3, 2025)
+
+### What's Already Implemented ✅
+
+#### Schema (Phase B) - ALL COMPLETE
+- ✅ **`orders` table extended** (`shared/schema.ts` lines 89-91)
+  - `channel: text("channel").notNull().default("ONLINE")`
+  - `paymentProvider: text("payment_provider").notNull().default("midtrans")`
+  - `source: text("source")` (nullable)
+  
+- ✅ **`projects` table extended** (`shared/schema.ts` line 46)
+  - `orderId: text("order_id").unique().references(() => orders.id, { onDelete: "set null" })`
+  - Allows 1:1 order-project linkage
+  
+- ✅ **`photographers` table created** (`shared/schema.ts` lines 146-152)
+  - Full schema with id, name, contact, isActive, createdAt
+  
+- ✅ **`sessions` table created** (`shared/schema.ts` lines 154-165)
+  - Includes projectId, orderId, startAt, endAt, location, notes, status
+  - Has `time_range tstzrange` column (generated via trigger)
+  
+- ✅ **`session_assignments` table created** (`shared/schema.ts` lines 167-172)
+  - Links sessions to photographers
+  
+- ✅ **Exclusion constraint for double-booking** (Database)
+  - Constraint: `no_overlap_per_photographer` on session_assignments
+  - Prevents same photographer from having overlapping time ranges
+  - Uses btree_gist extension with `photographer_id WITH =, time_range WITH &&`
+
+#### Service Logic (Phase C) - PARTIAL
+- ✅ **Auto-create project with order** (`server/routes.ts` lines 411-443)
+  - POST /api/orders creates both order AND project in transaction
+  - Response includes `{ orderId, projectId, snapToken, redirect_url }`
+  - Uses `generateSlug()` for unique project slugs
+  
+- ❌ **Offline orders NOT supported** (`server/routes.ts` lines 373-375)
+  - Current implementation REQUIRES Midtrans environment variables
+  - No conditional logic for `channel='OFFLINE'`
+  
+- ❌ **No manual payment endpoint**
+- ❌ **No photographers CRUD endpoints**
+- ❌ **No sessions CRUD endpoints**
+- ❌ **No session assignment endpoint with conflict handling**
+
+#### UI (Phase D) - MINIMAL
+- ✅ **Admin routes configured** (`client/src/App.tsx` lines 20-25)
+  - /dashboard-admin/projects
+  - /dashboard-admin/pricing
+  - /dashboard-admin/orders
+  
+- ✅ **No public links to admin** (VERIFIED)
+  - Not in `client/src/components/navigation.tsx`
+  - Admin-only routes properly isolated
+  
+- ❌ **No schedule drawer in orders page**
+- ❌ **No calendar view**
+- ❌ **No offline order form**
+- ❌ **No manual payment form**
+- ❌ **No order badge in projects admin**
+
+### What Needs Implementation 🔨
+
+#### Phase C - Service Logic
+1. **Modify POST /api/orders** to support offline orders
+   - Add conditional: skip Midtrans when `channel='OFFLINE'`
+   - Update `createOrderSchema` to accept channel, paymentProvider, source
+   
+2. **Add POST /api/orders/:id/payments** (manual payments)
+   
+3. **Add photographers CRUD** (5 endpoints)
+   - GET/POST /api/photographers
+   - GET/PATCH/DELETE /api/photographers/:id
+   
+4. **Add sessions CRUD** (5 endpoints)
+   - GET /api/sessions (with filters)
+   - POST /api/sessions
+   - GET/PATCH/DELETE /api/sessions/:id
+   
+5. **Add POST /api/sessions/:id/assign** (conflict handling)
+   - Handle exclusion constraint violation → return 409
+
+#### Phase D - UI
+1. Schedule drawer in admin orders
+2. Calendar view for scheduling
+3. Offline order creation form (admin)
+4. Manual payment form (admin)
+5. Order badge in projects admin
+
+#### Phase E - Documentation
+1. Update FEATURES_OVERVIEW.md with ERD, endpoints, flows
+2. Update README.md with migration instructions, testing guide
+3. Create UI_QA_CHECKLIST.md
+
+---
+
 ## Duplication Log
 
 **✅ NO DUPLICATIONS FOUND**
