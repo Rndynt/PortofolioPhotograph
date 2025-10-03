@@ -9,6 +9,7 @@ import OrderPage from "@/pages/order";
 import AdminProjects from "@/pages/admin/projects";
 import AdminPricing from "@/pages/admin/pricing";
 import AdminOrders from "@/pages/admin/orders";
+import AdminPhotographers from "@/pages/admin/photographers";
 import NotFound from "@/pages/not-found";
 
 function Router() {
@@ -23,6 +24,7 @@ function Router() {
       <Route path="/dashboard-admin/projects" component={AdminProjects} />
       <Route path="/dashboard-admin/pricing" component={AdminPricing} />
       <Route path="/dashboard-admin/orders" component={AdminOrders} />
+      <Route path="/dashboard-admin/photographers" component={AdminPhotographers} />
       <Route component={NotFound} />
     </Switch>
   );
