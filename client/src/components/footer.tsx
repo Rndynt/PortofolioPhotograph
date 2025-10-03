@@ -52,7 +52,7 @@ export default function Footer() {
         
         <div className="mt-8 pt-8 border-t border-border text-center text-muted-foreground">
           <p data-testid="footer-copyright">
-            &copy; {currentYear} Alex Chen Photography. All rights reserved.
+            &copy; {currentYear} Fauzul Rizky & Team Photography. All rights reserved.
           </p>
         </div>
       </div>
