@@ -757,6 +757,74 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Session Assignment endpoints
+  app.post("/api/sessions/:id/assign", async (req, res) => {
+    try {
+      const { id: sessionId } = req.params;
+      const { photographerId } = req.body;
+
+      if (!photographerId || typeof photographerId !== "string") {
+        return res.status(400).json({ message: "Photographer ID is required" });
+      }
+
+      // Verify session exists
+      const session = await storage.getSessionById(sessionId);
+      if (!session) {
+        return res.status(404).json({ message: "Session not found" });
+      }
+
+      // Verify photographer exists and is active
+      const photographer = await storage.getPhotographerById(photographerId);
+      if (!photographer) {
+        return res.status(404).json({ message: "Photographer not found" });
+      }
+      if (!photographer.isActive) {
+        return res.status(400).json({ message: "Photographer is not active" });
+      }
+
+      // Try to assign photographer (will throw PHOTOGRAPHER_BUSY on conflict)
+      const assignment = await storage.assignPhotographerToSession(sessionId, photographerId);
+      res.status(201).json(assignment);
+    } catch (error) {
+      if (error instanceof Error && error.message === "PHOTOGRAPHER_BUSY") {
+        return res.status(409).json({
+          code: "PHOTOGRAPHER_BUSY",
+          message: "Photographer is busy during this time",
+          conflict: true
+        });
+      }
+      console.error("Session assignment error:", error);
+      res.status(500).json({ message: "Failed to assign photographer to session" });
+    }
+  });
+
+  app.get("/api/sessions/:id/assignments", async (req, res) => {
+    try {
+      const { id: sessionId } = req.params;
+      
+      // Verify session exists
+      const session = await storage.getSessionById(sessionId);
+      if (!session) {
+        return res.status(404).json({ message: "Session not found" });
+      }
+
+      const assignments = await storage.getSessionAssignments(sessionId);
+      res.json(assignments);
+    } catch (error) {
+      res.status(500).json({ message: "Failed to fetch session assignments" });
+    }
+  });
+
+  app.delete("/api/session-assignments/:id", async (req, res) => {
+    try {
+      const { id: assignmentId } = req.params;
+      await storage.removeSessionAssignment(assignmentId);
+      res.status(204).send();
+    } catch (error) {
+      res.status(500).json({ message: "Failed to remove session assignment" });
+    }
+  });
+
   app.post("/api/midtrans/webhook", async (req, res) => {
     try {
       const {

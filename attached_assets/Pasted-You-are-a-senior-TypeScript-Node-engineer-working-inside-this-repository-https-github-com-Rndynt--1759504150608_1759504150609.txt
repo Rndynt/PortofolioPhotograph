@@ -1,0 +1,156 @@
+You are a senior TypeScript/Node engineer working inside this repository: https://github.com/Rndynt/PortofolioPhotograph (branch: with-dashboard). Execute work systematically, typed (TypeScript), validated (Zod), and non-duplicative. Use focused commits, and update docs as you go. On every page you touch, the browser console must be clean (no errors/warnings).
+
+================================================================================
+CONTEXT (do NOT re-implement finished parts)
+- Phase 2 backend is complete (orders, payments, Midtrans, projects, 7-image limit).
+- Phase 4 progress already applied: photographers, sessions, session_assignments, database extension/constraint, and sessions CRUD endpoints with filtering/time validation.
+- Treat existing code as the single source of truth. If you find parallel logic, consolidate; do not create duplicates.
+
+================================================================================
+NON-DUPLICATION POLICY
+- Keep a single "/api" Netlify entry (Express wrapper if present).
+- Reuse/centralize Zod schemas and shared types; no duplicate validators or route handlers.
+- If duplicates exist, merge and remove the extras; record this in Implementation Plan.
+
+================================================================================
+PHASE A — AUDIT & PLAN (run first; no code yet)
+1) Open and update "IMPLEMENTATION_PLAN.md" with:
+   - Status matrix: Done / In Progress / Next for every task in this prompt.
+   - For each task: mark [Implemented] / [Missing] / [Needs Fix] and list file paths.
+   - Duplication Log: note any duplicates and the consolidation decision.
+2) Confirm "netlify.toml" has the "/api/*" redirect to "/.netlify/functions/:splat".
+3) Confirm "/dashboard-admin" is not linked from any public header/nav/sitemap.
+Deliverable: an "Audit Summary" appended to "IMPLEMENTATION_PLAN.md".
+
+================================================================================
+PHASE B — VERIFY DATA STRUCTURE (only fix what’s missing)
+Verify the following exist and are migrated:
+- orders table: "channel" (ONLINE|OFFLINE), "payment_provider" (midtrans|cash|bank_transfer|...), "source" (nullable text).
+- projects table: "orderId" (nullable, unique, FK→orders.id, ON DELETE SET NULL).
+- sessions table: generated column "time_range = tstzrange(start_at, end_at, '[)')".
+- session_assignments table: exclusion constraint preventing overlaps for the same photographer (btree_gist enabled).
+If any item is missing, add a migration (raw SQL where required), apply it, and update the Drizzle snapshot.
+Deliverable: migrations + snapshot + ERD delta note in "FEATURES_OVERVIEW.md".
+
+================================================================================
+PHASE C — SERVICE LOGIC (transactions, endpoints)
+C1) Auto-create Project for every Order (online/offline):
+- Modify/confirm POST /api/orders performs a single DB transaction:
+  a) Insert order (compute totals; set channel, payment_provider, source).
+  b) Insert minimal project: orderId=order.id; title="${categoryName} - ${customerName}"; slug=slugify(title+date, unique); categoryId?; clientName; isPublished=false.
+  c) If online: create Midtrans Snap; persist midtransOrderId, snapToken, redirect_url.
+  d) Respond online: 201 { orderId, projectId, snapToken, redirect_url }; offline: 201 { orderId, projectId }.
+- Validate request with Zod; use 422 on validation errors.
+
+C2) Offline Orders:
+- Reuse POST /api/orders with "channel='OFFLINE'" and "payment_provider='cash'|'bank_transfer'"; no Midtrans call.
+- Response includes { orderId, projectId }.
+
+C3) Manual Payments:
+- POST /api/orders/:id/payments (Zod): { provider: 'cash'|'bank_transfer', status: 'settlement'|'pending'|'deny'|'cancel'|'expire', grossAmount: number, paidAt?: string }.
+- Insert payment; if status='settlement' and order is PENDING, optionally auto-advance to CONSULTATION (config flag).
+- Return updated payment timeline.
+
+C4) Sessions CRUD + search:
+- Already implemented: verify filtering by "photographerId", date range, and linkage to project/order. Ensure types and Zod are used.
+
+C5) Session Assignment with conflict handling (DO THIS NOW):
+- POST /api/sessions/:id/assign → body { photographerId }.
+- In a transaction, insert into session_assignments. If the exclusion constraint triggers (double booking), map the PG error to HTTP 409 with payload { code: 'PHOTOGRAPHER_BUSY', message: 'Photographer busy for this time range' }.
+- Add a small helper to normalize PG error codes to 409.
+
+C6) Photographers CRUD:
+- GET/POST /api/photographers, PATCH /api/photographers/:id, DELETE or isActive toggle.
+Deliverable for C: updated routes (server/routes.ts or modules), Zod validators, conflict-to-409 mapping helper, minimal tests for conflict mapping and DP calculation.
+
+================================================================================
+PHASE D — UI (Wouter, shadcn/ui, TanStack Query) — implement remaining items
+D1) Admin Orders (/dashboard-admin):
+- Add a Schedule Drawer to each order card:
+  - Create/update Session (start/end/duration/location/notes).
+  - Assign Photographer (active only). On 409, show toast "Photographer busy" and revert UI state.
+  - Show Project badge (Order-linked project) and a button to open the Project editor side panel.
+  - Read-only Payment timeline from /api/orders/:id/payments.
+- Keep Kanban columns: PENDING → CONSULTATION → SESSION → FINISHING → DRIVE_LINK → DONE (+ CANCELLED).
+
+D2) Scheduling Calendar:
+- Views: Per Photographer (day/week) and All.
+- Drag to move/resize session → PATCH /api/sessions/:id; handle 409 with toast and UI revert.
+
+D3) Projects Admin:
+- Show "Order #<id>" badge when projects.orderId exists.
+- Keep ≤7 images enforcement in UI and friendly counter.
+
+D4) Offline Order Form (Admin):
+- A simple admin form to create orders with channel='OFFLINE' and select payment_provider.
+- After creating, show a "Add Manual Payment" button (opens the Manual Payment form).
+
+D5) Manual Payment Form (Admin):
+- Against an order, allow adding payments (provider/status/amount/paidAt). Validate client-side with Zod.
+
+Quality rule: fix any console errors/warnings on all admin pages affected. Provide loading/empty/error states and toasts.
+
+Deliverables for D: components, routes, and screenshots/GIFs referenced from "FEATURES_OVERVIEW.md".
+
+================================================================================
+PHASE E — DOCS & QUALITY
+E1) Update "FEATURES_OVERVIEW.md":
+- ERD (Orders↔Projects 1:1 optional, Photographers/Sessions/Assignments).
+- New endpoints and request/response shapes.
+- Flow diagrams: online order; offline order + manual payment; scheduling + conflict handling.
+
+E2) Update "README.md":
+- How to run migrations (note: btree_gist + exclusion raw SQL).
+- How to test offline orders and manual payments.
+- How to reproduce a conflict (two overlapping assignments for the same photographer → expect 409).
+- Include CLI smoke examples for creating offline orders, manual payments, creating sessions, and assigning photographers.
+
+E3) Create/Update "UI_QA_CHECKLIST.md":
+- Home shows dynamic packages & projects; "/project/:slug" shows ≤7 images.
+- "/order" online flow opens Snap (sandbox) and returns to a result view.
+- Webhook settlement advances status visible in Kanban.
+- Admin: create offline order, add cash payment, pipeline behaves same as online.
+- Admin: create session, assign FG, drag in calendar; overlapping assignment → 409 handled gracefully.
+- No public link to "/dashboard-admin".
+- Browser console is clean on all modified pages.
+
+E4) Optional seed:
+- Add 2–3 photographers and a couple of example sessions for demo.
+
+Deliverables for E: updated docs committed; seed data if added.
+
+================================================================================
+TASK LIST (copy into IMPLEMENTATION_PLAN.md and keep updated)
+- [ ] Phase A audit completed; duplication log and status matrix updated with file paths.
+- [ ] Verify/fix schema: orders channel/payment_provider/source; projects.orderId unique FK set null; sessions time_range; exclusion constraint present.
+- [ ] POST /api/orders auto-creates minimal Project in a single transaction; returns { orderId, projectId, ... }.
+- [ ] Offline order flow implemented (channel=OFFLINE, provider=cash/bank_transfer).
+- [ ] Manual payment endpoint implemented.
+- [ ] Photographers CRUD implemented.
+- [ ] Sessions CRUD verified; search by photographerId and range works.
+- [ ] Session assignment endpoint implemented with 409 conflict handling.
+- [ ] Admin Orders: Schedule Drawer, Project badge, Payment timeline, Kanban unchanged.
+- [ ] Scheduling Calendar: per-photographer & all; drag/resize with proper error handling.
+- [ ] Projects Admin: show Order badge; image cap maintained.
+- [ ] Offline order form and manual payment form implemented in admin.
+- [ ] Docs updated: FEATURES_OVERVIEW, README (with CLI smoke), UI_QA_CHECKLIST.
+- [ ] Browser console is clean across all modified routes.
+- [ ] E2E smoke: online (Snap) + offline (cash) + conflict attempt + Kanban to DONE.
+
+================================================================================
+ACCEPTANCE CRITERIA (Definition of Done)
+1) Every new Order (online/offline) auto-creates a linked minimal Project (projects.orderId = order.id, unique 1:1). Manual Projects without orders remain valid (orderId NULL).
+2) Offline Order flow exists in Admin; manual payments can be added; pipeline behaves like online (optional auto-advance on settlement).
+3) Session Assignment endpoint returns 409 on overlaps; drawer and calendar UI handle conflicts gracefully and keep console clean.
+4) No duplicate routes/validators/types; single "/api" entry preserved; "/dashboard-admin" remains unlinked from public nav.
+5) Docs updated; Implementation Plan reflects audit, statuses, and file paths; commits are small and clearly labeled.
+
+================================================================================
+REPORT BACK (commit/PR note template)
+- Audit Summary: what was already implemented vs added now (with file paths).
+- Files touched grouped by Phase/Task.
+- CLI smoke examples executed and results.
+- Before/After screenshots or short GIFs for the drawer, calendar, and offline payment flow.
+- Known limitations and next steps (if any small items remain).
+
+Now, verify whether C5 session assignment is still pending; implement it with 409 conflict handling; then continue through the remaining tasks until all Acceptance Criteria are satisfied and the console is clean.
