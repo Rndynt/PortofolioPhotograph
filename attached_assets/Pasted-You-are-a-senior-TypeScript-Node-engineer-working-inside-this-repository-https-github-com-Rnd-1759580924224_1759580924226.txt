@@ -1,0 +1,138 @@
+You are a senior TypeScript/Node engineer working **inside this repository**: https://github.com/Rndynt/PortofolioPhotograph (branch: `with-dashboard`). Your job is to **verify quickly what is already implemented, then finish EVERYTHING missing** with minimal back-and-forth. Keep changes **typed (TS)**, **validated (Zod)**, **non-duplicative**, and ensure **all dashboard pages render with a clean browser console (no errors/warnings)**.
+
+===============================================================================
+EXECUTION MODE — BUILD-FIRST, MINIMAL STATUS CHATTER
+- Do **one short audit snapshot** (update a checklist with file paths), then **implement the remaining tasks in batches**.
+- **Do not** request frequent reviews or pause after micro-steps. Ship the full feature set, then provide **one final completion report**.
+- Keep a **single `/api`** Netlify entry; **no duplicate routers/validators/types**. If duplicates exist, **merge** and delete the extras.
+
+===============================================================================
+STEP 0 — QUICK AUDIT SNAPSHOT (ONE PASS, THEN BUILD)
+Open **`IMPLEMENTATION_PLAN.md`**, add a table with these items and mark each as:
+`[Implemented] / [Missing] / [Needs Fix]` + **file paths** implementing it. Then proceed to build without further status churn.
+
+BACKEND (Schema + Services)
+- Check that data structure changes are done (orders: channel/payment_provider/source; projects: orderId unique FK set null; sessions: time_range; session_assignments: exclusion)  ← (likely done)
+- Create project automatically with order (online & offline)
+- Add support for offline orders (reuse POST /api/orders with channel='OFFLINE')
+- Create endpoint for manual payments (cash/bank_transfer)
+- Manage photographer data and endpoints (CRUD)
+- Manage session data and endpoints (CRUD + search by photographerId/date)  ← (sessions CRUD reported done; verify)
+- Add endpoint for assigning sessions, handle conflicts (409 on overlap)
+
+DASHBOARD UI (Admin at `/dashboard-admin`, no public nav link)
+- Build photographer management page (list, create, edit, activate/deactivate)
+- Add schedule drawer for orders (create/update session, assign photographer, conflict toast)
+- Create calendar view for sessions (per-photographer & all; drag/resize with 409 handling)
+- Add order link to projects (badge “Order #<id>” on project editor)
+- Add form for offline orders (admin flow)
+- Add form for manual payments (admin flow)
+
+DOCS & QA
+- Document features with diagrams (ERD & flows)
+- Update guide for setup and testing (README + curl smoke)
+- Create UI testing checklist (UI_QA_CHECKLIST.md)
+- Create sample data for photographers (seed)
+
+Deliverable for STEP 0: a **single commit** updating `IMPLEMENTATION_PLAN.md` (the snapshot). After that, **build**.
+
+===============================================================================
+STEP 1 — COMPLETE BACKEND (ONLY WHAT’S MISSING)
+1) **Auto-create Project with every Order**
+   - Modify `POST /api/orders` so it wraps **one DB transaction**:
+     a) Insert **order** (compute totals; set `channel`, `payment_provider`, `source`)
+     b) Insert **minimal project**:
+        `orderId = order.id`, `title = "${categoryName} - ${customerName}"`,
+        `slug = unique slugify(title + date)`, `categoryId?`, `clientName`, `isPublished=false`
+     c) If online: create Midtrans Snap; persist `midtransOrderId`, `snapToken`, `redirect_url`
+     d) Respond:
+        - Online → `201 { orderId, projectId, snapToken, redirect_url }`
+        - Offline → `201 { orderId, projectId }`
+   - Zod-validate request; use 422 for validation failures.
+
+2) **Offline orders**
+   - Reuse `POST /api/orders` with `channel='OFFLINE'`, `payment_provider='cash'|'bank_transfer'`. **No** Midtrans call.
+
+3) **Manual payments**
+   - `POST /api/orders/:id/payments` (Zod): `{ provider: 'cash'|'bank_transfer', status: 'settlement'|'pending'|'deny'|'cancel'|'expire', grossAmount: number, paidAt?: string }`
+   - Insert into `payments`. If `status='settlement'` and order `PENDING`, optionally auto-advance to `CONSULTATION` (config flag).
+   - Return updated payment timeline.
+
+4) **Photographers CRUD**
+   - `GET/POST /api/photographers`, `PATCH /api/photographers/:id`, `DELETE or isActive toggle`.
+
+5) **Sessions CRUD (verify)**
+   - Ensure filtering by `photographerId` + date range + linkage to order/project; Zod schemas present.
+
+6) **Session assignment with conflicts**
+   - `POST /api/sessions/:id/assign` → `{ photographerId }`
+   - In a TX, insert into `session_assignments`. On exclusion violation, return **409**:
+     `{ code: 'PHOTOGRAPHER_BUSY', message: 'Photographer busy for this time range' }`
+   - Add a PG-error→409 mapper for consistent behavior.
+
+Add a small **`BACKEND_SMOKE.md`** with ready-to-run curl for: create offline order → manual payment → create session → assign twice (expect 409 on second).
+
+===============================================================================
+STEP 2 — BUILD DASHBOARD UI (FOCUS: IMPLEMENT, NOT CHAT)
+Use **Wouter**, **shadcn/ui**, **TanStack Query**, shared types (Zod infer). **Zero console errors/warnings**.
+
+A) **Orders page**  
+- **Schedule Drawer** on each order card:
+  - Create/Update **Session** (start/end/duration/location/notes)
+  - **Assign Photographer** (active list); on **409** show toast “Photographer busy” and revert UI
+  - **Payment timeline** (read-only from `/api/orders/:id/payments`)
+  - **Project badge** linking to the project editor
+- Keep Kanban columns: `PENDING → CONSULTATION → SESSION → FINISHING → DRIVE_LINK → DONE (+ CANCELLED)`
+
+B) **Scheduling Calendar**
+- Views: **Per Photographer** (day/week) and **All**
+- Drag & resize → `PATCH /api/sessions/:id`; on 409, revert and toast error
+- Query invalidation keeps drawer, kanban, and calendar in sync
+
+C) **Photographer management page**
+- List, create, edit, activate/deactivate (uses photographers CRUD)
+
+D) **Projects admin**
+- Show **“Order #<id>” badge** when `projects.orderId` is set
+- Keep ≤7 images counter/enforcement
+
+E) **Offline order form (admin)**
+- Create orders with `channel='OFFLINE'`, select `payment_provider`
+- After create, route to order detail with a button to **Add Manual Payment**
+
+F) **Manual payment form (admin)**
+- Form to post `/api/orders/:id/payments` with Zod client validation
+
+G) **Typed API client + cache**
+- Add/extend `client/src/lib/api.ts` typed wrappers
+- Use QueryKeys + invalidate/refetch after mutations
+
+===============================================================================
+STEP 3 — DOCS & QUALITY
+- **FEATURES_OVERVIEW.md**: ERD (Orders↔Projects optional 1:1; Photographers/Sessions/Assignments) + endpoint matrix + flow diagrams (online order; offline + manual payment; scheduling & conflicts)
+- **README.md**: migrations (btree_gist + exclusion raw SQL), seeds, curl smoke, how to reproduce a 409
+- **UI_QA_CHECKLIST.md**:  
+  Home dynamic; `/project/:slug` ≤7 images; `/order` opens Snap; webhook→Kanban move; admin offline order + manual payment; create session + assign + drag calendar; overlap→**409 handled**; **no public link** to `/dashboard-admin`; **console clean**
+- **Seed** (optional): add 2–3 photographers + 2 example sessions
+
+===============================================================================
+ACCEPTANCE CRITERIA (nothing can be skipped)
+1) **Every order** (online/offline) auto-creates a **linked minimal project** (`projects.orderId = order.id`, unique 1:1). Manual projects without orders remain valid (`orderId = NULL`).
+2) **Offline order** flow and **manual payment** endpoint exist and work end-to-end; pipeline mirrors online (optional auto-advance on settlement).
+3) **Session assignment** returns **409** on overlaps; Orders drawer & Calendar **handle conflicts cleanly**; **no console errors/warnings**.
+4) Dashboard UI features implemented: photographer management page, schedule drawer, calendar view, offline order & manual payment forms, project badge.
+5) No duplicate routers/validators/types; single `/api` preserved; `/dashboard-admin` remains unlinked publicly.
+6) Docs updated; `IMPLEMENTATION_PLAN.md` contains the one audit snapshot with file paths; final report summarizes all changes.
+
+===============================================================================
+REPORTING CADENCE (STRICT)
+- **One** commit for the audit snapshot (STEP 0).  
+- **Build everything** (STEP 1–3) with focused commits.  
+- **One** final summary comment/commit note including:
+  - Which checklist items were `[Implemented]` vs `[Already present]`
+  - Files touched (grouped by Backend/UI/Docs)
+  - Screenshots/GIFs for Orders drawer (409 + success), Calendar drag/resize, Offline order + manual payment
+  - curl outputs from `BACKEND_SMOKE.md`
+  - Any small known limitations + next steps.
+
+Proceed now. **Do not pause for frequent reviews**—finish the feature set end-to-end, keep the console clean, then submit the final summary.

@@ -1,5 +1,5 @@
 import { db } from "../server/db";
-import { categories, priceTiers, projects, projectImages, orders } from "@shared/schema";
+import { categories, priceTiers, projects, projectImages, orders, photographers } from "@shared/schema";
 import { eq } from "drizzle-orm";
 
 async function seed() {
@@ -299,13 +299,37 @@ async function seed() {
 
     console.log("✅ Created demo order");
 
+    console.log("📷 Seeding photographers...");
+
+    // Insert photographers
+    await db.insert(photographers).values([
+      {
+        name: "Alex Martinez",
+        contact: "alex@photostudio.com",
+        isActive: true,
+      },
+      {
+        name: "Sarah Chen",
+        contact: "+62812345001",
+        isActive: true,
+      },
+      {
+        name: "David Williams",
+        contact: "david.w@photography.co",
+        isActive: false,
+      },
+    ]);
+
+    console.log("✅ Created 3 photographers (2 active, 1 inactive)");
+
     console.log("🎉 Database seeding completed successfully!");
     console.log("\nSeeded data summary:");
-    console.log("  - 3 categories (Wedding, Portrait, Commercial)");
-    console.log("  - 7 price tiers (3 for Wedding, 2 for Portrait, 2 for Commercial)");
-    console.log("  - 2 projects (1 published wedding, 1 unpublished portrait)");
-    console.log("  - 8 project images (5 wedding, 3 portrait)");
+    console.log("  - 3 categories (Pre/Post Wedding, Bride Wedding Event, Graduation)");
+    console.log("  - 6 price tiers");
+    console.log("  - 2 projects (1 published wedding, 1 unpublished graduation)");
+    console.log("  - 8 project images (5 wedding, 3 graduation)");
     console.log("  - 1 pending order");
+    console.log("  - 3 photographers (2 active, 1 inactive)");
 
   } catch (error) {
     console.error("❌ Error seeding database:", error);

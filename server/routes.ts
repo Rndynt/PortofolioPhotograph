@@ -847,6 +847,22 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  app.get("/api/session-assignments", async (req, res) => {
+    try {
+      const allSessions = await storage.getSessions();
+      const allAssignments = await Promise.all(
+        allSessions.map(async (session) => {
+          const assignments = await storage.getSessionAssignments(session.id);
+          return assignments;
+        })
+      );
+      const flatAssignments = allAssignments.flat();
+      res.json(flatAssignments);
+    } catch (error) {
+      res.status(500).json({ message: "Failed to fetch session assignments" });
+    }
+  });
+
   app.delete("/api/session-assignments/:id", async (req, res) => {
     try {
       const { id: assignmentId } = req.params;

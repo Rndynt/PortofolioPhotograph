@@ -1,10 +1,10 @@
 import { Link, useRoute } from "wouter";
-import { LayoutDashboard, Image, DollarSign, ShoppingCart, Camera } from "lucide-react";
+import { LayoutDashboard, Image, DollarSign, ShoppingCart, Camera, Calendar } from "lucide-react";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 
 interface AdminLayoutProps {
   children: React.ReactNode;
-  activeTab: "projects" | "pricing" | "orders" | "photographers";
+  activeTab: "projects" | "pricing" | "orders" | "photographers" | "calendar";
 }
 
 export default function AdminLayout({ children, activeTab }: AdminLayoutProps) {
@@ -26,7 +26,7 @@ export default function AdminLayout({ children, activeTab }: AdminLayoutProps) {
 
       <div className="container mx-auto px-4 py-6">
         <Tabs value={activeTab} className="mb-6">
-          <TabsList className="grid w-full max-w-2xl grid-cols-4">
+          <TabsList className="grid w-full max-w-3xl grid-cols-5">
             <Link href="/dashboard-admin/projects">
               <TabsTrigger value="projects" className="w-full" data-testid="tab-projects">
                 <Image className="h-4 w-4 mr-2" />
@@ -49,6 +49,12 @@ export default function AdminLayout({ children, activeTab }: AdminLayoutProps) {
               <TabsTrigger value="photographers" className="w-full" data-testid="tab-photographers">
                 <Camera className="h-4 w-4 mr-2" />
                 Photographers
+              </TabsTrigger>
+            </Link>
+            <Link href="/dashboard-admin/calendar">
+              <TabsTrigger value="calendar" className="w-full" data-testid="tab-calendar">
+                <Calendar className="h-4 w-4 mr-2" />
+                Calendar
               </TabsTrigger>
             </Link>
           </TabsList>
