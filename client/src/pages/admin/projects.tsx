@@ -531,7 +531,28 @@ export default function AdminProjects() {
                     <TableCell>
                       <img src={project.mainImageUrl} alt={project.title} className="w-16 h-16 object-cover rounded" />
                     </TableCell>
-                    <TableCell className="font-medium">{project.title}</TableCell>
+                    <TableCell>
+                      <div className="space-y-1">
+                        <div className="font-medium">{project.title}</div>
+                        {project.orderId && (
+                          <a 
+                            href={`/dashboard-admin/orders?highlight=${project.orderId}`}
+                            onClick={(e) => {
+                              e.preventDefault();
+                              window.location.href = `/dashboard-admin/orders`;
+                            }}
+                          >
+                            <Badge 
+                              variant="outline" 
+                              className="text-xs cursor-pointer hover:bg-gray-100"
+                              data-testid={`badge-order-${project.slug}`}
+                            >
+                              Order #{project.orderId.slice(0, 8)}
+                            </Badge>
+                          </a>
+                        )}
+                      </div>
+                    </TableCell>
                     <TableCell>{category?.name || "-"}</TableCell>
                     <TableCell>{project.clientName || "-"}</TableCell>
                     <TableCell>
