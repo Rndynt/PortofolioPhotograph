@@ -1,4 +1,5 @@
-import img8023 from '@assets/stock_images/professional_busines_4bcc34fe.jpg';
+//import img8023 from '@assets/stock_images/professional_busines_4bcc34fe.jpg';
+import img8023 from '@assets/stock_images/profile/IMG_1481.jpeg';
 
 export default function AboutSection() {
   return (
