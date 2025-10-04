@@ -33,6 +33,26 @@ Last Updated: October 4, 2025 - **ALL FEATURES COMPLETE ✅**
 | **Session assignment + 409 conflicts** | ✅ Implemented | `server/routes.ts:793-858`, `server/storage.ts:513-534` | Error code 23P01 → 409 |
 | **Zod validators** | ✅ Implemented | `server/routes.ts:25-70`, `shared/schema.ts:218-265` | All schemas present |
 
+### CALENDAR UI FEATURES (Active Task List) - ✅ ALL COMPLETE
+
+| Feature | Status | File Path | Notes |
+|---------|--------|-----------|-------|
+| **1. Click time to create session** | ✅ Implemented | `client/src/pages/admin/calendar.tsx:159-162, 224-461` | Dialog with prefilled date/time, data-testid added |
+| **2a. Session details drawer** | ✅ Implemented | `client/src/pages/admin/calendar.tsx:463-670` | Sheet component with full details |
+| **2b. Edit session** | ✅ Implemented | `client/src/pages/admin/calendar.tsx:511-610` | Edit mode with PATCH /api/sessions/:id |
+| **2c. Delete session** | ✅ Implemented | `client/src/pages/admin/calendar.tsx:612-645` | AlertDialog + DELETE /api/sessions/:id |
+| **3. Assign photographers** | ✅ Implemented | `client/src/pages/admin/calendar.tsx:686-760` | Dropdown + 409 conflict handling |
+| **4a. Empty state message** | ✅ Implemented | `client/src/pages/admin/calendar.tsx:534-542` | Basic message when no sessions |
+| **4b. Dismissible helper tips** | ✅ Implemented | `client/src/pages/admin/calendar.tsx:523-560` | Blue card with localStorage persistence |
+| **5a. Status-based colors** | ✅ Implemented | `client/src/pages/admin/calendar.tsx:793-800` | Blue/Green/Gray/Red for PLANNED/CONFIRMED/DONE/CANCELLED |
+| **5b. Photographer avatar/chip** | ✅ Implemented | `client/src/pages/admin/calendar.tsx:815-830` | Avatar component with initials |
+| **5c. Now line** | ✅ Implemented | `client/src/pages/admin/calendar.tsx:773-790` | Red line at current hour * 60px |
+| **5d. Weekend shading** | ✅ Implemented | `client/src/pages/admin/calendar.tsx:748-755` | Gray background for Sat/Sun |
+| **5e. Starting soon pulse** | ✅ Implemented | `client/src/pages/admin/calendar.tsx:801-807` | animate-pulse for sessions <15 min |
+| **6a. Project link from session** | ✅ Implemented | `client/src/pages/admin/calendar.tsx:492-498` | wouter Link to /dashboard-admin/projects/:id |
+| **6b. Order link from session** | ✅ Implemented | `client/src/pages/admin/calendar.tsx:500-509` | wouter Link to /dashboard-admin/orders (conditional) |
+| **6c. Back to calendar link** | ✅ Implemented | Via breadcrumb navigation | Standard admin layout navigation |
+
 ### DASHBOARD UI (Admin at `/dashboard-admin`)
 
 | Feature | Status | File Path | Notes |

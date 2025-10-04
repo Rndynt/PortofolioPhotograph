@@ -1,0 +1,96 @@
+You are a senior TypeScript/Node engineer working **inside this repository**: https://github.com/Rndynt/PortofolioPhotograph (branch: `with-dashboard`).  
+Your mission now: **verify quickly what’s already implemented, then finish the remaining Calendar UI features end-to-end** with minimal chatter. Keep changes **typed (TS)**, **validated (Zod)**, **non-duplicative**, and ensure **zero console errors/warnings** on all touched pages.
+
+================================================================================
+EXECUTION MODE — BUILD FIRST, MINIMAL STATUS
+• Do a **single quick audit snapshot** (update a checklist with file paths), then **implement the rest** in focused batches.  
+• **Do not** pause for frequent reviews or micro status updates. Submit **one final summary** when everything below is done.  
+• Keep a **single `/api`** Netlify entry; if duplicates (routes/validators/types/UI) exist, **merge** and delete extras (log it in the plan).  
+• Do **not** add any public link to **`/dashboard-admin`**.
+
+================================================================================
+STEP 0 — QUICK AUDIT SNAPSHOT (ONE PASS ONLY)
+Open **`IMPLEMENTATION_PLAN.md`**, add a table for the **ACTIVE TASK LIST** (below). For each row, mark:  
+**[Implemented] / [Missing] / [Needs Fix]** and list **file paths**. Then proceed to build without more status chatter.
+
+**Backend quick pre-checks (touch only if missing):**
+- `POST /api/sessions/:id/assign` exists and returns **409** on overlap (exclusion constraint).  
+- Sessions CRUD endpoints exist (they were reported complete).  
+- Orders auto-create minimal Project (online/offline).  
+- Photographers CRUD endpoints exist.  
+If anything above is missing, implement it **once** in `server/routes.ts` with Zod and existing patterns; otherwise go straight to UI work.
+
+================================================================================
+ACTIVE TASK LIST — CALENDAR UI FEATURES (from latest spec & screenshot)
+> Only these items. Do **not** re-list earlier backend tasks that are already done.
+
+1) **Click time to create new session**  
+   • On the **Calendar** page, clicking an empty time cell opens **Create Session** dialog.  
+   • Prefill: **Date** = clicked day; **Start** = clicked hour; **End** = Start + **2h** (editable).  
+   • Fields (Zod validated): `projectId (required)`, `orderId? (auto-fill if project has orderId)`, `startAt`, `endAt`, `location?`, `notes?`, `status ('PLANNED'|'CONFIRMED'|'DONE'|'CANCELLED')`.  
+   • Submit → **POST `/api/sessions`**; on success close dialog, toast OK, **invalidate calendar queries**.  
+   • Add `data-testid` on cells and dialog controls.
+
+2) **Show session details, edit, delete**  
+   • Clicking a session block opens **Session Details** drawer: times, status, project link, order link (if any), assigned photographer(s).  
+   • Actions: **Edit** → `PATCH /api/sessions/:id`, **Delete** (confirm) → `DELETE /api/sessions/:id`.  
+   • Refresh via targeted invalidation; handle Zod/server errors with friendly toasts; **no console errors**.
+
+3) **Assign photographers directly on calendar**  
+   Choose at least one path (implement the best for current layout):  
+   • **A. Lane reassignment**: per-photographer lanes → drag a session to another lane; call **POST `/api/sessions/:id/assign`**.  
+   • **B. Quick assign menu**: context menu “Assign photographer” → pick active FG → call the same endpoint.  
+   • On **409** (overlap), revert UI & show toast “Photographer busy for this time range”.
+
+4) **Guide users on creating sessions**  
+   • Empty state: when no sessions → message **“Click any time slot to create a session.”**  
+   • Small helper (dismissible) with tips (click to create, drag to resize, assign via right-click/drag).  
+   • Keyboard: **Enter** submits dialog; **Esc** closes; focus trap enabled.
+
+5) **Improve calendar look with indicators**  
+   • Color by **status**; **avatar/initials chip** for assigned photographer + tooltip.  
+   • **Now** line; weekend shading; subtle **“starting soon”** (<15 min) pulse.  
+   • Use Tailwind + shadcn; avoid global CSS leaks; ensure **no React key/uncontrolled warnings**.
+
+6) **Add navigation links for context**  
+   • From Calendar/Session drawer → **Project editor** and, if present, **Order details**.  
+   • From Project editor → back to **Calendar** (breadcrumb).  
+   • Use Wouter `<Link>`; keep `/dashboard-admin` **unlinked** in public nav.
+
+================================================================================
+IMPLEMENTATION NOTES (precise & practical)
+• Calendar file is likely under `client/src/pages/admin/.../calendar.tsx` (use current repo paths).  
+• **Slot click mapping**: add `data-day` + `data-hour` to each cell if missing; compute UTC ISO:  
+  - `startAt = toIsoUtc(day, hour)`; `endAt = addHours(startAt, 2)` (editable).  
+• **Drag/resize**: reuse existing `PATCH /api/sessions/:id`; on 409 revert UI and toast.  
+• **Query keys**: `['sessions',{from,to,photographerId}]`; invalidate this key after any create/update/delete/assign.  
+• **API client**: extend `client/src/lib/api.ts` with typed wrappers for Sessions + Assignment + Photographers.  
+• **A11y**: shadcn Dialog/Drawer with labelled titles, focus trap, keyboard support.  
+• **Testing hooks**: add `data-testid` for (`calendar-cell`, `session-block`, `create-session-submit`, `assign-photographer`).
+
+================================================================================
+DONE CRITERIA (verify all before reporting)
+- Clicking an empty slot opens a prefilled **Create Session** dialog; submit creates the session; calendar refreshes; **console stays clean**.  
+- Session **Details/Edit/Delete** works with query invalidation and no console noise.  
+- Direct **Assignment** works; **409** overlap is handled (toast + visual revert).  
+- **Guidance** appears (empty state + tips), dismissible and accessible.  
+- **Indicators** render (status colors, avatar chip, now line, weekend shading, soon pulse).  
+- **Navigation** links work (Calendar ↔ Project/Order), and `/dashboard-admin` remains unlinked publicly.
+
+================================================================================
+DOCS (single pass at end)
+• Update **`FEATURES_OVERVIEW.md`**: calendar UX notes, indicators legend, 409 behavior.  
+• Update **`README.md`**: short *Calendar quick start* and curl smoke for session create/assign.  
+• Update/ensure **`UI_QA_CHECKLIST.md`** includes the six items above.  
+• Optional seed: 2–3 photographers & 2 sample sessions for demo.
+
+================================================================================
+REPORTING CADENCE (STRICT)
+• **One** commit to update `IMPLEMENTATION_PLAN.md` snapshot.  
+• **Build everything** above with focused commits.  
+• **One** final summary comment/commit note including:  
+  – The audit table (what was Implemented vs Already present) with **file paths**.  
+  – 3–5 screenshots or a short GIF (click-to-create, details/edit, assign success, assign 409 revert, indicators view).  
+  – Any tiny known limitations + follow-ups.
+
+Proceed now: do the single audit snapshot, then implement tasks 1–6 thoroughly. Do not pause for interim reviews; finish and submit the final report when everything passes and the console is clean.

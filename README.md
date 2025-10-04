@@ -154,10 +154,16 @@ Access the admin dashboard at `/dashboard-admin` (no public links, direct URL ac
    - Activate/deactivate photographers
 
 5. **Calendar** (`/dashboard-admin/calendar`)
-   - Week-based session view
-   - Filter by photographer
-   - View workload statistics
-   - Conflict visualization
+   - **Interactive week view**: Click any time slot to create a session
+   - **Session management**: Click sessions to view details, edit, delete, or assign photographers
+   - **Visual indicators**: Status-based colors (blue=planned, green=confirmed, gray=done, red=cancelled)
+   - **Conflict detection**: Real-time photographer availability checking with 409 conflict handling
+   - **Now line**: Red line showing current time when viewing current week
+   - **Weekend shading**: Subtle background for Saturday/Sunday columns
+   - **Starting soon pulse**: Animated sessions beginning within 15 minutes
+   - **Photographer filter**: View specific photographer schedules
+   - **Workload statistics**: Session counts and hours per photographer
+   - **Navigation**: Direct links to related projects and orders
 
 ## API Documentation
 
@@ -184,11 +190,52 @@ See [FEATURES_OVERVIEW.md](./FEATURES_OVERVIEW.md) for:
 4. Order advances through same stages
 
 ### Scheduling Flow
-1. Admin creates session for an order/project
-2. Admin assigns photographer to session
-3. If conflict detected → **409 Conflict** response
-4. UI shows toast, reverts assignment
-5. Calendar shows all sessions with photographer assignments
+1. Admin opens Calendar view
+2. Clicks empty time slot → Create session dialog opens (prefilled with clicked date/time)
+3. Fills in project, location, notes, status → Submit
+4. Session appears on calendar with status-based color
+5. Clicks session block → Details drawer opens
+6. Assigns photographer from dropdown → POST /api/sessions/:id/assign
+7. If conflict detected → **409 Conflict** response
+8. UI shows toast "Photographer busy for this time range", reverts assignment
+9. Calendar updates in real-time showing all sessions with photographer badges
+
+### Calendar Quick Start
+```bash
+# Create a session via API
+curl -X POST http://localhost:5000/api/sessions \
+  -H "Content-Type: application/json" \
+  -d '{
+    "projectId": "PROJECT_ID",
+    "startAt": "2025-10-05T14:00:00Z",
+    "endAt": "2025-10-05T16:00:00Z",
+    "location": "Studio A",
+    "notes": "Wedding shoot",
+    "status": "CONFIRMED"
+  }'
+
+# Assign photographer
+curl -X POST http://localhost:5000/api/sessions/SESSION_ID/assign \
+  -H "Content-Type: application/json" \
+  -d '{"photographerId": "PHOTOGRAPHER_ID"}'
+# Success: 201 Created
+# Conflict: 409 {"code":"PHOTOGRAPHER_BUSY","message":"Photographer is busy during this time"}
+
+# Unassign photographer
+curl -X DELETE http://localhost:5000/api/session-assignments/ASSIGNMENT_ID
+```
+
+**UI Workflow:**
+1. Navigate to `/dashboard-admin/calendar`
+2. Click any time slot (e.g., Thursday 2:00 PM)
+3. Dialog opens with date/time prefilled
+4. Select project from dropdown → Order auto-fills if linked
+5. Adjust end time if needed (default +2 hours)
+6. Click "Create Session" → Session appears on calendar
+7. Click session block → Details drawer opens
+8. Select photographer from "Assign Photographer" dropdown
+9. If busy → Toast appears, assignment reverted
+10. If available → Photographer badge shows on session
 
 ## Conflict Detection
 

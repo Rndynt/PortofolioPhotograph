@@ -92,6 +92,43 @@
    - Constraint: `EXCLUDE USING gist (photographer_id WITH =, time_range WITH &&)`
    - Returns HTTP 409 on conflict
 
+## Calendar UI Features
+
+### Interactive Session Management
+- **Click empty time slot**: Opens create session dialog with prefilled date/time (default 2-hour duration)
+- **Click session block**: Opens session details drawer with full information and actions
+- **Edit session**: Modify times, location, notes, or status from details drawer
+- **Delete session**: Confirmation dialog before permanent deletion
+- **Assign photographers**: Dropdown to assign active photographers with conflict detection
+
+### Visual Indicators Legend
+| Indicator | Meaning |
+|-----------|---------|
+| **Blue session block** | PLANNED status |
+| **Green session block** | CONFIRMED status |
+| **Gray session block** | DONE status |
+| **Red session block** | CANCELLED status |
+| **Red horizontal line** | Current time (now line) |
+| **Gray column background** | Weekend (Saturday/Sunday) |
+| **Pulsing animation** | Session starting within 15 minutes |
+| **Avatar chips** | Assigned photographer initials/badges |
+| **Blue highlighted date** | Today's date in calendar header |
+
+### 409 Conflict Handling
+When assigning a photographer to an overlapping session:
+1. Backend trigger detects time range overlap: `check_photographer_overlap()`
+2. Returns HTTP 409 with error code `23P01` (exclusion violation)
+3. Frontend catches 409 response
+4. Shows toast notification: "Photographer busy for this time range"
+5. Assignment reverted, calendar remains unchanged
+6. User can try assigning different photographer or adjust session times
+
+### Navigation & Context
+- **From session details**: Links to project editor and order details (when applicable)
+- **From project editor**: Breadcrumb back to calendar view
+- **Photographer filter**: Dropdown to view specific photographer's schedule
+- **Week navigation**: Previous/Next week buttons + Today quick jump
+
 ## API Endpoints Matrix
 
 ### Categories & Pricing
