@@ -1,7 +1,8 @@
 import { useState, useMemo } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { apiRequest, queryClient } from "@/lib/queryClient";
-import type { Session, Photographer, SessionAssignment } from "@shared/schema";
+import type { Session, Photographer, SessionAssignment, Project, Order } from "@shared/schema";
+import { insertSessionSchema } from "@shared/schema";
 import AdminLayout from "./layout";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -9,7 +10,14 @@ import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useToast } from "@/hooks/use-toast";
-import { ChevronLeft, ChevronRight, Calendar as CalendarIcon, User } from "lucide-react";
+import { ChevronLeft, ChevronRight, Calendar as CalendarIcon, User, Plus } from "lucide-react";
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
+import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
+import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
+import { useForm } from "react-hook-form";
+import { zodResolver } from "@hookform/resolvers/zod";
+import { z } from "zod";
 
 interface SessionWithDetails extends Session {
   photographers?: Photographer[];
@@ -17,6 +25,16 @@ interface SessionWithDetails extends Session {
 
 const HOURS = Array.from({ length: 24 }, (_, i) => i);
 const DAYS_OF_WEEK = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+
+const createSessionFormSchema = insertSessionSchema.extend({
+  startAt: z.string().min(1, "Start time is required"),
+  endAt: z.string().min(1, "End time is required"),
+  projectId: z.string().min(1, "Project is required"),
+  orderId: z.string().optional().nullable(),
+  location: z.string().optional().nullable(),
+  notes: z.string().optional().nullable(),
+  status: z.enum(["PLANNED", "CONFIRMED", "DONE", "CANCELLED"]).default("PLANNED"),
+});
 
 function getWeekDates(date: Date): Date[] {
   const current = new Date(date);
@@ -54,6 +72,8 @@ function getSessionPosition(session: Session, dayStart: Date): { top: number; he
 export default function AdminCalendar() {
   const [currentDate, setCurrentDate] = useState(new Date());
   const [photographerFilter, setPhotographerFilter] = useState<string>("all");
+  const [dialogOpen, setDialogOpen] = useState(false);
+  const [selectedTimeSlot, setSelectedTimeSlot] = useState<{ date: Date; hour: number } | null>(null);
   const { toast } = useToast();
 
   const weekDates = useMemo(() => getWeekDates(currentDate), [currentDate]);
@@ -68,6 +88,14 @@ export default function AdminCalendar() {
 
   const { data: allAssignments = [] } = useQuery<SessionAssignment[]>({
     queryKey: ['/api/session-assignments'],
+  });
+
+  const { data: projects = [] } = useQuery<Project[]>({
+    queryKey: ['/api/projects'],
+  });
+
+  const { data: orders = [] } = useQuery<Order[]>({
+    queryKey: ['/api/orders'],
   });
 
   const updateSessionMutation = useMutation({
@@ -95,6 +123,43 @@ export default function AdminCalendar() {
       }
     }
   });
+
+  const createSessionMutation = useMutation({
+    mutationFn: async (data: z.infer<typeof createSessionFormSchema>) => {
+      const response = await apiRequest('POST', '/api/sessions', {
+        projectId: data.projectId,
+        orderId: data.orderId || null,
+        startAt: data.startAt,
+        endAt: data.endAt,
+        location: data.location || null,
+        notes: data.notes || null,
+        status: data.status,
+      });
+      return response.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['/api/sessions'] });
+      toast({ title: "Session created successfully" });
+      setDialogOpen(false);
+    },
+    onError: (error: any) => {
+      const message = error.message || "";
+      if (message.includes("409") || message.includes("conflict")) {
+        toast({ 
+          title: "Scheduling conflict", 
+          description: "There is a conflict with another session at this time",
+          variant: "destructive" 
+        });
+      } else {
+        toast({ title: "Failed to create session", variant: "destructive" });
+      }
+    }
+  });
+
+  const handleTimeSlotClick = (date: Date, hour: number) => {
+    setSelectedTimeSlot({ date, hour });
+    setDialogOpen(true);
+  };
 
   const sessionsWithPhotographers: SessionWithDetails[] = useMemo(() => {
     return sessions.map(session => {
@@ -156,6 +221,245 @@ export default function AdminCalendar() {
     setCurrentDate(new Date());
   };
 
+  const CreateSessionDialog = () => {
+    const form = useForm<z.infer<typeof createSessionFormSchema>>({
+      resolver: zodResolver(createSessionFormSchema),
+      defaultValues: {
+        projectId: "",
+        orderId: null,
+        startAt: "",
+        endAt: "",
+        location: "",
+        notes: "",
+        status: "PLANNED",
+      },
+    });
+
+    // When dialog opens, prefill with selected time slot
+    useMemo(() => {
+      if (selectedTimeSlot && dialogOpen) {
+        const startDateTime = new Date(selectedTimeSlot.date);
+        startDateTime.setHours(selectedTimeSlot.hour, 0, 0, 0);
+        
+        const endDateTime = new Date(startDateTime);
+        endDateTime.setHours(startDateTime.getHours() + 2);
+
+        form.reset({
+          projectId: "",
+          orderId: null,
+          startAt: startDateTime.toISOString().slice(0, 16),
+          endAt: endDateTime.toISOString().slice(0, 16),
+          location: "",
+          notes: "",
+          status: "PLANNED",
+        });
+      }
+    }, [selectedTimeSlot, dialogOpen]);
+
+    const selectedProject = projects.find(p => p.id === form.watch("projectId"));
+    
+    // Auto-populate order if project has orderId
+    useMemo(() => {
+      if (selectedProject?.orderId) {
+        form.setValue("orderId", selectedProject.orderId);
+      }
+    }, [selectedProject]);
+
+    const onSubmit = (data: z.infer<typeof createSessionFormSchema>) => {
+      createSessionMutation.mutate(data);
+    };
+
+    return (
+      <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
+        <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto" data-testid="dialog-create-session">
+          <DialogHeader>
+            <DialogTitle>Create Session</DialogTitle>
+            <DialogDescription>
+              Schedule a new photography session. All times are in your local timezone.
+            </DialogDescription>
+          </DialogHeader>
+          
+          <Form {...form}>
+            <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
+              <FormField
+                control={form.control}
+                name="projectId"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Project *</FormLabel>
+                    <Select onValueChange={field.onChange} value={field.value || ""}>
+                      <FormControl>
+                        <SelectTrigger data-testid="select-project">
+                          <SelectValue placeholder="Select a project" />
+                        </SelectTrigger>
+                      </FormControl>
+                      <SelectContent>
+                        {projects.map(project => (
+                          <SelectItem key={project.id} value={project.id}>
+                            {project.title}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+
+              <FormField
+                control={form.control}
+                name="orderId"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Order (Optional)</FormLabel>
+                    <Select 
+                      onValueChange={(value) => field.onChange(value || null)} 
+                      value={field.value || ""}
+                    >
+                      <FormControl>
+                        <SelectTrigger data-testid="select-order">
+                          <SelectValue placeholder="Select an order (optional)" />
+                        </SelectTrigger>
+                      </FormControl>
+                      <SelectContent>
+                        <SelectItem value="">None</SelectItem>
+                        {orders.map(order => (
+                          <SelectItem key={order.id} value={order.id}>
+                            {order.customerName} - {order.status}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+
+              <div className="grid grid-cols-2 gap-4">
+                <FormField
+                  control={form.control}
+                  name="startAt"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Start Date/Time *</FormLabel>
+                      <FormControl>
+                        <Input 
+                          type="datetime-local" 
+                          {...field} 
+                          data-testid="input-start-time"
+                        />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+
+                <FormField
+                  control={form.control}
+                  name="endAt"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>End Date/Time *</FormLabel>
+                      <FormControl>
+                        <Input 
+                          type="datetime-local" 
+                          {...field} 
+                          data-testid="input-end-time"
+                        />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+              </div>
+
+              <FormField
+                control={form.control}
+                name="location"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Location (Optional)</FormLabel>
+                    <FormControl>
+                      <Input 
+                        placeholder="e.g., Studio A, Client Office" 
+                        {...field} 
+                        value={field.value || ""}
+                        data-testid="input-location"
+                      />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+
+              <FormField
+                control={form.control}
+                name="notes"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Notes (Optional)</FormLabel>
+                    <FormControl>
+                      <Textarea 
+                        placeholder="Add any additional notes..." 
+                        {...field} 
+                        value={field.value || ""}
+                        className="min-h-20"
+                        data-testid="input-notes"
+                      />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+
+              <FormField
+                control={form.control}
+                name="status"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Status</FormLabel>
+                    <Select onValueChange={field.onChange} value={field.value}>
+                      <FormControl>
+                        <SelectTrigger data-testid="select-status">
+                          <SelectValue />
+                        </SelectTrigger>
+                      </FormControl>
+                      <SelectContent>
+                        <SelectItem value="PLANNED">Planned</SelectItem>
+                        <SelectItem value="CONFIRMED">Confirmed</SelectItem>
+                        <SelectItem value="DONE">Done</SelectItem>
+                        <SelectItem value="CANCELLED">Cancelled</SelectItem>
+                      </SelectContent>
+                    </Select>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+
+              <DialogFooter>
+                <Button 
+                  type="button" 
+                  variant="outline" 
+                  onClick={() => setDialogOpen(false)}
+                  data-testid="button-cancel"
+                >
+                  Cancel
+                </Button>
+                <Button 
+                  type="submit" 
+                  disabled={createSessionMutation.isPending}
+                  data-testid="button-create-session"
+                >
+                  {createSessionMutation.isPending ? "Creating..." : "Create Session"}
+                </Button>
+              </DialogFooter>
+            </form>
+          </Form>
+        </DialogContent>
+      </Dialog>
+    );
+  };
+
   if (sessionsLoading) {
     return (
       <AdminLayout activeTab="calendar">
@@ -210,6 +514,12 @@ export default function AdminCalendar() {
 
         <Card>
           <CardContent className="p-0">
+            {sessions.length === 0 && (
+              <div className="p-8 text-center text-gray-500" data-testid="empty-state-message">
+                <CalendarIcon className="h-12 w-12 mx-auto mb-2 text-gray-400" />
+                <p className="text-lg">Click any time slot to create a session</p>
+              </div>
+            )}
             <div className="flex border-b">
               <div className="w-16 flex-shrink-0 border-r"></div>
               {weekDates.map((date, i) => {
@@ -255,7 +565,9 @@ export default function AdminCalendar() {
                     {HOURS.map(hour => (
                       <div 
                         key={hour} 
-                        className="h-[60px] border-b"
+                        className="h-[60px] border-b cursor-pointer hover:bg-blue-50/50 transition-colors"
+                        onClick={() => handleTimeSlotClick(date, hour)}
+                        data-testid={`timeslot-${dayIndex}-${hour}`}
                       />
                     ))}
                     
@@ -266,11 +578,12 @@ export default function AdminCalendar() {
                       return (
                         <div
                           key={session.id}
-                          className="absolute left-1 right-1 bg-blue-500 text-white rounded p-2 text-xs cursor-pointer hover:bg-blue-600 transition-colors overflow-hidden"
+                          className="absolute left-1 right-1 bg-blue-500 text-white rounded p-2 text-xs cursor-pointer hover:bg-blue-600 transition-colors overflow-hidden pointer-events-auto"
                           style={{
                             top: `${position.top}px`,
                             height: `${position.height}px`,
                           }}
+                          onClick={(e) => e.stopPropagation()}
                           data-testid={`session-${session.id}`}
                         >
                           <div className="font-semibold truncate">
@@ -377,6 +690,8 @@ export default function AdminCalendar() {
             </div>
           </CardContent>
         </Card>
+
+        <CreateSessionDialog />
       </div>
     </AdminLayout>
   );
