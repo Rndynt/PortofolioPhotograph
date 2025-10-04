@@ -512,6 +512,36 @@ export class DatabaseStorage implements IStorage {
   // Session Assignments
   async assignPhotographerToSession(sessionId: string, photographerId: string): Promise<SessionAssignment> {
     try {
+      // Get the session we're trying to assign to
+      const session = await this.getSessionById(sessionId);
+      if (!session) {
+        throw new Error('SESSION_NOT_FOUND');
+      }
+
+      // Check for overlapping sessions with this photographer
+      const photographerSessions = await db
+        .select({ session: sessions })
+        .from(sessionAssignments)
+        .innerJoin(sessions, eq(sessionAssignments.sessionId, sessions.id))
+        .where(eq(sessionAssignments.photographerId, photographerId));
+
+      // Check if any of the photographer's existing sessions overlap with the new session
+      const sessionStart = new Date(session.startAt);
+      const sessionEnd = new Date(session.endAt);
+
+      for (const { session: existingSession } of photographerSessions) {
+        const existingStart = new Date(existingSession.startAt);
+        const existingEnd = new Date(existingSession.endAt);
+
+        // Check for overlap: sessions overlap if one starts before the other ends
+        const hasOverlap = sessionStart < existingEnd && sessionEnd > existingStart;
+        
+        if (hasOverlap) {
+          throw new Error('PHOTOGRAPHER_BUSY');
+        }
+      }
+
+      // No overlap found, proceed with assignment
       const [assignment] = await db
         .insert(sessionAssignments)
         .values({ sessionId, photographerId })

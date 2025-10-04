@@ -425,8 +425,8 @@ export default function AdminCalendar() {
                   <FormItem>
                     <FormLabel>Order (Optional)</FormLabel>
                     <Select 
-                      onValueChange={(value) => field.onChange(value || null)} 
-                      value={field.value || ""}
+                      onValueChange={(value) => field.onChange(value === "none" ? null : value)} 
+                      value={field.value || "none"}
                     >
                       <FormControl>
                         <SelectTrigger data-testid="select-order">
@@ -434,7 +434,7 @@ export default function AdminCalendar() {
                         </SelectTrigger>
                       </FormControl>
                       <SelectContent>
-                        <SelectItem value="">None</SelectItem>
+                        <SelectItem value="none">None</SelectItem>
                         {orders.map(order => (
                           <SelectItem key={order.id} value={order.id}>
                             {order.customerName} - {order.status}
@@ -857,8 +857,8 @@ export default function AdminCalendar() {
                       <FormItem>
                         <FormLabel>Order (Optional)</FormLabel>
                         <Select 
-                          onValueChange={(value) => field.onChange(value || null)} 
-                          value={field.value || ""}
+                          onValueChange={(value) => field.onChange(value === "none" ? null : value)} 
+                          value={field.value || "none"}
                         >
                           <FormControl>
                             <SelectTrigger data-testid="select-edit-order">
@@ -866,7 +866,7 @@ export default function AdminCalendar() {
                             </SelectTrigger>
                           </FormControl>
                           <SelectContent>
-                            <SelectItem value="">None</SelectItem>
+                            <SelectItem value="none">None</SelectItem>
                             {orders.map(order => (
                               <SelectItem key={order.id} value={order.id}>
                                 {order.customerName} - {order.status}
