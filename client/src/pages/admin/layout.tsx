@@ -17,10 +17,8 @@ export default function AdminLayout({ children, activeTab }: AdminLayoutProps) {
               <LayoutDashboard className="h-6 w-6" />
               <h1 className="text-2xl font-bold">Admin Dashboard</h1>
             </div>
-            <Link href="/">
-              <a className="text-sm text-gray-600 hover:text-black" data-testid="link-back-home">
-                Back to Site
-              </a>
+            <Link href="/" className="text-sm text-gray-600 hover:text-black" data-testid="link-back-home">
+              Back to Site
             </Link>
           </div>
         </div>
