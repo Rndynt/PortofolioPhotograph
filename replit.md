@@ -56,12 +56,11 @@ Successfully configured a fresh GitHub import to run in the Replit environment:
 - Pushed complete database schema using `npm run db:push` (Drizzle Kit)
   - Successfully created all tables: categories, priceTiers, projects, projectImages, portfolioImages, orders, payments, sessions, sessionAssignments, photographers, contactSubmissions
   - All enums created: order_status, payment_status, payment_type, session_status
-- Applied photographer scheduling constraints (adapted from migrations/001_scheduling_constraints.sql):
+- Applied partial photographer scheduling constraints:
   - Created btree_gist extension for PostgreSQL
-  - Added immutable function wrapper `make_time_range()` for tstzrange generation
-  - Added time_range column to sessions table as a generated column
-  - Created trigger-based overlap prevention system (check_photographer_overlap function and trigger)
-  - Prevents photographers from being assigned to overlapping sessions with error code 23P01
+  - Note: Database-level exclusion constraint not fully implemented due to timestamp type limitations (sessions table uses `timestamp without time zone` but tstzrange requires `timestamp with time zone`)
+  - Application-level conflict detection is in place in server/storage.ts (checks for overlapping sessions and throws PHOTOGRAPHER_BUSY error with 409 status)
+  - Future enhancement: Modify sessions table to use `timestamptz` type to enable full database-level exclusion constraint
 - Configured workflow "Start application" to run `npm run dev` on port 5000 with webview output
 - Verified existing Vite configuration already has `allowedHosts: true` (line 26 in server/vite.ts) for Replit proxy support
 - Verified server is already configured to bind to 0.0.0.0:5000 (lines 66-68 in server/index.ts)
@@ -69,15 +68,14 @@ Successfully configured a fresh GitHub import to run in the Replit environment:
 - Frontend displaying perfectly: "Story Framer" photography portfolio with masonry grid layout
 - All navigation links functional (WORK, ABOUT, CONTACT)
 - Admin dashboard fully functional:
-  - Projects page: Shows 2 published projects (Wedding and Portrait)
-  - Photographers page: Shows 2 active photographers with toggle controls
-  - Pricing page: Shows 3 categories with base prices in Rupiah
-  - Orders and Calendar pages accessible
+  - Projects page accessible (empty, ready for content)
+  - Photographers page accessible (empty, ready for content)
+  - Pricing page accessible (empty, ready for content)
+  - Orders Kanban board accessible
+  - Calendar view accessible and functional
 - Backend Express server responding correctly with database integration
 - Deployment configuration already set to autoscale with `npm run build` and `npm run start`
-- Updated .gitignore with comprehensive Node.js patterns (environment variables, logs, editor files)
 - Application fully functional and ready for use in Replit environment
-- Seed data already populated in database
 
 ### Mobile Navigation Scroll Fix (Sept 30, 2025)
 Fixed mobile menu scroll-to-section functionality that was broken after adding Framer Motion animations:
