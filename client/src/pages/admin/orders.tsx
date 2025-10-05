@@ -578,12 +578,16 @@ export default function AdminOrders() {
                         <span className="font-semibold" data-testid="text-detail-total">{formatIDR(selectedOrder.totalPrice)}</span>
                       </div>
                       <div className="flex justify-between">
-                        <span>Down Payment ({selectedOrder.dpPercent}%):</span>
-                        <span className="font-semibold text-green-600" data-testid="text-detail-dp">{formatIDR(selectedOrder.dpAmount)}</span>
+                        <span>Total Paid:</span>
+                        <span className="font-semibold text-green-600" data-testid="text-detail-paid">
+                          {formatIDR(payments?.filter(p => p.status === 'settlement').reduce((sum, p) => sum + p.grossAmount, 0) || 0)}
+                        </span>
                       </div>
                       <div className="flex justify-between text-gray-600">
                         <span>Remaining:</span>
-                        <span data-testid="text-detail-remaining">{formatIDR(selectedOrder.totalPrice - selectedOrder.dpAmount)}</span>
+                        <span className="font-semibold" data-testid="text-detail-remaining">
+                          {formatIDR(selectedOrder.totalPrice - (payments?.filter(p => p.status === 'settlement').reduce((sum, p) => sum + p.grossAmount, 0) || 0))}
+                        </span>
                       </div>
                     </div>
                   </div>
@@ -609,6 +613,8 @@ export default function AdminOrders() {
                             orderId={selectedOrder.id}
                             onSubmit={(data) => createManualPaymentMutation.mutate(data)}
                             isPending={createManualPaymentMutation.isPending}
+                            totalPrice={selectedOrder.totalPrice}
+                            totalPaid={payments?.filter(p => p.status === 'settlement').reduce((sum, p) => sum + p.grossAmount, 0) || 0}
                           />
                         </DialogContent>
                       </Dialog>
@@ -1181,14 +1187,22 @@ function OfflineOrderForm({
 function ManualPaymentForm({ 
   orderId, 
   onSubmit, 
-  isPending 
+  isPending,
+  totalPrice,
+  totalPaid
 }: { 
   orderId: string; 
   onSubmit: (data: ManualPaymentFormData) => void; 
   isPending: boolean;
+  totalPrice: number;
+  totalPaid: number;
 }) {
+  const remaining = totalPrice - totalPaid;
+  
   const form = useForm<ManualPaymentFormData>({
-    resolver: zodResolver(manualPaymentSchema),
+    resolver: zodResolver(manualPaymentSchema.extend({
+      grossAmount: z.coerce.number().positive("Amount must be positive").max(remaining, `Payment cannot exceed remaining amount of ${formatIDR(remaining)}`)
+    })),
     defaultValues: {
       provider: "cash",
       status: "settlement",
@@ -1202,6 +1216,13 @@ function ManualPaymentForm({
   return (
     <Form {...form}>
       <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
+        <div className="p-3 bg-blue-50 rounded-lg mb-4">
+          <div className="flex justify-between text-sm">
+            <span className="font-medium">Remaining Amount:</span>
+            <span className="font-semibold text-blue-700">{formatIDR(remaining)}</span>
+          </div>
+        </div>
+        
         <FormField
           control={form.control}
           name="provider"

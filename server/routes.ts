@@ -601,6 +601,20 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(404).json({ message: "Order not found" });
       }
       
+      // Calculate total paid so far (only settled payments)
+      const existingPayments = await storage.getPaymentsByOrder(orderId);
+      const totalPaid = existingPayments
+        .filter(p => p.status === 'settlement')
+        .reduce((sum, p) => sum + p.grossAmount, 0);
+      
+      // Validate payment doesn't exceed remaining
+      const remaining = order.totalPrice - totalPaid;
+      if (validatedData.status === 'settlement' && validatedData.grossAmount > remaining) {
+        return res.status(400).json({ 
+          message: `Payment amount (${validatedData.grossAmount}) cannot exceed remaining amount (${remaining})` 
+        });
+      }
+      
       // Create payment record
       const payment = await db.insert(payments).values({
         orderId,
@@ -613,12 +627,29 @@ export async function registerRoutes(app: Express): Promise<Server> {
         rawNotifJson: { manual: true, notes: validatedData.notes || null }
       }).returning();
       
-      // If settlement and order is PENDING, advance to CONSULTATION
-      if (validatedData.status === "settlement" && order.status === "PENDING") {
-        await storage.updateOrder(orderId, { 
-          status: "CONSULTATION",
-          paymentStatus: "settlement"
-        });
+      // Check if order is fully paid after this payment
+      if (validatedData.status === "settlement") {
+        const newTotalPaid = totalPaid + validatedData.grossAmount;
+        
+        // If fully paid or overpaid, update order status
+        if (newTotalPaid >= order.totalPrice) {
+          // Auto-advance status based on current status
+          let newStatus = order.status;
+          if (order.status === "PENDING") {
+            newStatus = "CONSULTATION";
+          }
+          
+          await storage.updateOrder(orderId, { 
+            status: newStatus,
+            paymentStatus: "settlement"
+          });
+        } else if (order.status === "PENDING") {
+          // Partial payment on pending order
+          await storage.updateOrder(orderId, { 
+            status: "CONSULTATION",
+            paymentStatus: "pending"
+          });
+        }
       }
       
       res.status(201).json(payment[0]);
