@@ -1,0 +1,132 @@
+You are a senior TypeScript/Node engineer working **inside this repo**: https://github.com/Rndynt/PortofolioPhotograph (branch: `with-dashboard`).  
+**Goal:** Adjust the **Calendar/Session** model & UI to match the updated concept below, then finish the features **quickly** with minimal status chatter. Keep everything **typed (TS)**, **validated (Zod)**, **non-duplicative**, and ensure **ZERO console errors/warnings**.
+
+================================================================================
+NEW CONCEPT (MUST MATCH)
+1) **A time slot can contain MANY projects**. The hierarchy is **TimeSlot → Project (Session) → Photographer(s)**.  
+2) A time slot is a **wrapper for an hour window** on a given day. It can contain sessions of **any duration** that overlap that hour (e.g., 08:00–09:00 and 08:00–11:00 both appear in the **08** slot).  
+3) **Custom slot name** is supported (per day + hour).  
+4) **Calendar hour range is configurable** (default **06–20**, not 00–23) and stored in **Settings** (new Admin tab).  
+5) **All date/time handling uses the `Asia/Jakarta` timezone** and **24-hour format** (NO AM/PM). Use shared helpers (`fromTimezone* / toTimezone*`) so we never manipulate raw UTC in components.
+
+Do **NOT** expose `/dashboard-admin` in public nav.
+
+================================================================================
+EXECUTION MODE — BUILD FIRST, MINIMAL STATUS
+- Do **one** quick audit update to `IMPLEMENTATION_PLAN.md` (table with file paths), then **implement** the rest.  
+- Avoid repeated reviews; submit **one final completion report**.
+
+================================================================================
+STEP 0 — QUICK AUDIT SNAPSHOT (ONE PASS)
+Update `IMPLEMENTATION_PLAN.md` with a table for the ACTIVE TASK LIST (below). For each, mark:  
+**[Implemented] / [Missing] / [Needs Fix]** + **file paths**. Then start building.
+
+Backend pre-checks (touch only if missing):
+- Sessions CRUD endpoints exist; assignment endpoint `POST /api/sessions/:id/assign` returns **409** on overlaps.  
+- Orders auto-create minimal Project (online/offline).  
+- Photographers CRUD endpoints exist.
+
+================================================================================
+SCHEMA & SERVICES (ONLY WHAT’S NEEDED FOR THE NEW CONCEPT)
+A) **Time slot metadata** (custom label per day+hour)  
+Create table `calendar_slots`:
+- `id` (cuid), **`localDate`** (DATE in Asia/Jakarta), **`hour`** (INT 0–23), `label?` (TEXT), `notes?`, `createdAt`, `updatedAt`  
+- **UNIQUE(localDate, hour)**  
+- Drizzle + migration (raw SQL only if needed)
+
+B) **App settings (calendar config & timezone)**  
+Create table `app_settings` (singleton row):
+- `id` (cuid), `timezone` TEXT default `'Asia/Jakarta'`, `calendarStartHour` INT default **6**, `calendarEndHour` INT default **20**  
+- Seed one row if empty. Endpoints:
+  - `GET /api/settings/app`
+  - `PATCH /api/settings/app` (Zod: `{ calendarStartHour: int[0..23], calendarEndHour: int[0..23], timezone?: 'Asia/Jakarta' }`)
+  - Validate `calendarStartHour < calendarEndHour`.
+
+C) **Sessions stay as they are** (variable durations), **no DB change required**. A session appears in a slot if it **overlaps** that hour window `[H,H+1)`. The existing **photographer overlap exclusion constraint** still governs double-booking.
+
+D) **Timezone utilities (shared)**  
+Add `shared/datetime.ts` (or reuse if present) exporting:
+- `JKT_TZ = 'Asia/Jakarta'`
+- `fromJktToUtc(dateLike)`, `fromUtcToJkt(dateLike)`, `formatJkt(date, 'HH:mm')`, etc.  
+Use `date-fns` + `date-fns-tz` (`zonedTimeToUtc`, `utcToZonedTime`) and **always show 24-hour format**.
+
+================================================================================
+API SURFACE (ADD/ADAPT)
+- `GET /api/calendar/slots?from=YYYY-MM-DD&to=YYYY-MM-DD` → returns `{ localDate, hour, label }[]` for the range.
+- `PATCH /api/calendar/slots` → body array of `{ localDate, hour, label? }` (upsert by UNIQUE key).
+- `GET /api/settings/app` / `PATCH /api/settings/app` (see above).
+
+(Existing endpoints remain: Sessions CRUD, Session Assign, Photographers CRUD, Orders→Projects auto-create.)
+
+================================================================================
+ACTIVE TASK LIST — **WHAT TO BUILD NOW (UI + small APIs above)**
+1) **Calendar hour range from Settings (default 06–20)**  
+   - Add **“Settings” tab** in Admin with inputs for `Start hour (0–23)` & `End hour (0–23)` and a (fixed) timezone label **Asia/Jakarta**.  
+   - Persist via `PATCH /api/settings/app`. Calendar reads these values and renders rows only for that range.  
+   - Store in TanStack Query cache; re-render when updated.
+
+2) **Slot → Sessions grouping (multi-project per slot)**  
+   - On Calendar, each **hour row** per day is a **Slot**.  
+   - If a session overlaps `[H, H+1)` (in **JKT**), render it **inside that Slot**.  
+   - Clicking an **empty cell** opens a **Slot panel** (modal/drawer):  
+     • Shows existing sessions that overlap this slot (cards: project title, duration, assigned photographers).  
+     • Top area: **Slot name** field bound to `calendar_slots` (create/upsert label); save on blur/Enter.  
+     • **Add Session** button opens the **Create Session** dialog prefilled: `startAt = H:00`, `endAt = +2h` (editable).  
+   - Clicking a **session block** still opens **Session Details** (edit/delete).
+
+3) **Create Session via click** (refined)  
+   - From Slot panel or direct-click action, open **Create Session** dialog with fields:  
+     `projectId (required)`, `orderId?` (auto if project has order), `startAt (JKT)`, `endAt (JKT)`, `location?`, `notes?`, `status`.  
+   - Submit → `POST /api/sessions`; on success: toast OK, **invalidate** `['sessions', {from,to,photographerId}]`.  
+   - 24-hour display; no AM/PM.
+
+4) **Show session details, edit, delete**  
+   - Drawer with `PATCH` + `DELETE`; refetch on success.  
+   - 24-hour JKT formatting; **no console warnings**.
+
+5) **Assign photographers directly on calendar**  
+   - Context menu **“Assign photographer”** or lane-drag (whichever fits current layout).  
+   - `POST /api/sessions/:id/assign`; on **409** (overlap), **revert UI** & toast: “Photographer busy for this time range”.
+
+6) **Guidance & Indicators**  
+   - Empty-state banner: **“Tap/click any time slot to create a session. Slots can contain multiple projects.”**  
+   - Tips (dismissible): create via slot, sessions can span hours, assign photographers.  
+   - Indicators: status colors; photographer avatar/initials chip w/ tooltip; “Now” line; weekend shading; **mobile responsive & horizontally scrollable** day columns; sticky hour gutter.
+
+7) **Navigation for context**  
+   - From Slot panel/session drawer → **Project editor** (and **Order** if exists).  
+   - Breadcrumb from Project back to **Calendar**.  
+   - Keep `/dashboard-admin` unreachable from public nav.
+
+================================================================================
+IMPLEMENTATION NOTES
+- **Mobile**: make the day columns horizontally scrollable (`overflow-x-auto`), hour rows vertically scrollable, ensure touch targets are 44px+.  
+- **Data shaping**: compute slot membership in **JKT** with helpers (convert session UTC to JKT, then test overlap with `[H,H+1)`).  
+- **Query keys**: `['appSettings']`, `['calendarSlots',{from,to}]`, `['sessions',{from,to,photographerId}]`; invalidate narrowly.  
+- **Testing hooks**: add `data-testid` (`slot-cell`, `slot-name-input`, `session-card`, `create-session-submit`, `assign-photographer`).  
+- **No duplication**: reuse existing Zod schemas/types; add only what’s new (settings & slots).  
+- **Console clean**: fix keys, uncontrolled inputs, and missing deps warnings.
+
+================================================================================
+DONE CRITERIA (VERIFY ALL)
+- Calendar renders **06–20** by default (editable in Settings); values persisted and applied live.  
+- Clicking **08:00** (any day) shows a panel with **ALL sessions overlapping 08:00–09:00** (e.g., 08–09 and 08–11) and a **slot name** input.  
+- Creating a session from the slot pre-fills times; variable durations are supported; UI updates correctly.  
+- Assigning photographers works; on overlap server returns **409**, UI **reverts** and shows a toast.  
+- All times shown in **Asia/Jakarta, 24-hour format**; no AM/PM anywhere.  
+- **Mobile** calendar is responsive and scrollable; interactions work with touch.  
+- No public link to `/dashboard-admin`; **browser console is empty**.
+
+================================================================================
+DOCS (single pass at the end)
+- **FEATURES_OVERVIEW.md**: diagram “TimeSlot → Session(Project) → Photographer”, calendar screenshots (desktop + mobile), 24h JKT policy.  
+- **README.md**: how to change hours in Settings; curl for slots API; note timezone handling; quick smoke for session create/assign.  
+- **UI_QA_CHECKLIST.md**: add checks for multi-project slot, slot naming, settings-driven hours, 409 conflict handling, mobile scroll.
+
+================================================================================
+REPORTING (ONE FINAL SUMMARY)
+- Paste the `IMPLEMENTATION_PLAN.md` table (Implemented/Missing/Needs Fix) with file paths.  
+- 4–6 screenshots/GIFs: slot with multiple sessions, slot naming, create session flow, assign success + 409, Settings changing hours, mobile view.  
+- Note any tiny limitations & next steps.
+
+**Proceed now**: do the single audit update, then implement the schema/API for **calendar_slots** + **app_settings**, and finish the **UI tasks** above. Execute end-to-end and submit the final summary when the console is clean.

@@ -29,35 +29,35 @@
 
 | Feature | Status | File Path | Notes |
 |---------|--------|-----------|-------|
-| `calendar_slots` table | [Missing] | `shared/schema.ts` | Need: id, localDate, hour, label, notes, UNIQUE(localDate,hour) |
-| `app_settings` table | [Missing] | `shared/schema.ts` | Need: id, timezone, calendarStartHour, calendarEndHour |
-| Timezone utilities | [Missing] | `shared/datetime.ts` | Need: JKT_TZ, fromJktToUtc, formatJkt, etc. |
-| Calendar slots storage | [Missing] | `server/storage.ts` | Need: getSlots, upsertSlots methods |
-| App settings storage | [Missing] | `server/storage.ts` | Need: getSettings, updateSettings methods |
+| `calendar_slots` table | [Implemented] | `shared/schema.ts:174-184` | ✅ Has UNIQUE(localDate, hour) |
+| `app_settings` table | [Implemented] | `shared/schema.ts:186-193` | ✅ Has timezone, calendarStartHour, calendarEndHour |
+| Timezone utilities | [Implemented] | `shared/datetime.ts:1-25` | ✅ JKT_TZ, fromJktToUtc, formatJkt, toJktHour |
+| Calendar slots storage | [Implemented] | `server/storage.ts:581-606` | ✅ getCalendarSlots, upsertCalendarSlots |
+| App settings storage | [Implemented] | `server/storage.ts:608-636` | ✅ getAppSettings, updateAppSettings |
 
 ### API Endpoints (NEW REQUIREMENTS)
 
 | Feature | Status | File Path | Notes |
 |---------|--------|-----------|-------|
-| GET /api/calendar/slots | [Missing] | `server/routes.ts` | Query: from, to → returns slots array |
-| PATCH /api/calendar/slots | [Missing] | `server/routes.ts` | Body: array of {localDate, hour, label} |
-| GET /api/settings/app | [Missing] | `server/routes.ts` | Returns settings singleton |
-| PATCH /api/settings/app | [Missing] | `server/routes.ts` | Update calendarStartHour, calendarEndHour |
+| GET /api/calendar/slots | [Implemented] | `server/routes.ts:701-727` | ✅ Query: from, to → returns slots array |
+| PATCH /api/calendar/slots | [Implemented] | `server/routes.ts:729-738` | ✅ Body: array of {localDate, hour, label} |
+| GET /api/settings/app | [Implemented] | `server/routes.ts:743-750` | ✅ Returns settings singleton |
+| PATCH /api/settings/app | [Implemented] | `server/routes.ts:752-762` | ✅ Update calendarStartHour, calendarEndHour |
 
-### UI Components (ACTIVE TASK LIST)
+### UI Components (ACTIVE TASK LIST) **← CURRENT STATUS**
 
 | Task | Status | File Path | Notes |
 |------|--------|-----------|-------|
-| 1. Settings tab (Admin) | [Missing] | `client/src/pages/admin/settings.tsx` | Start/end hour inputs, timezone display |
-| 2. Multi-session slot grouping | [Needs Fix] | `client/src/pages/admin/calendar.tsx` | Show ALL sessions overlapping hour window |
-| 3. Slot panel with naming | [Missing] | `client/src/pages/admin/calendar.tsx` | Modal/drawer with slot name input + session cards |
-| 4. Create session from slot | [Needs Fix] | `client/src/pages/admin/calendar.tsx` | Prefill with slot hour, 24h JKT format |
-| 5. Session details (24h JKT) | [Needs Fix] | `client/src/pages/admin/calendar.tsx` | Show times in Asia/Jakarta 24h |
-| 6. Settings-driven hours | [Missing] | `client/src/pages/admin/calendar.tsx` | Render 06-20 by default, read from settings |
-| 7. Assign photographers | [Implemented] | `client/src/pages/admin/calendar.tsx` | Already has 409 handling |
-| 8. Guidance & tips | [Needs Fix] | `client/src/pages/admin/calendar.tsx` | Update to reflect multi-session concept |
-| 9. Mobile responsive | [Needs Fix] | `client/src/pages/admin/calendar.tsx` | Horizontal scroll for days, touch-friendly |
-| 10. Navigation/breadcrumbs | [Missing] | Various | Project ↔ Calendar, no public /dashboard-admin link |
+| 1. Settings tab (Admin) | **[Missing]** | `client/src/pages/admin/settings.tsx` | ❌ No file exists, no tab in layout |
+| 2. Multi-session slot grouping | **[Needs Fix]** | `client/src/pages/admin/calendar.tsx:33` | ❌ Hardcoded HOURS 0-23, no settings |
+| 3. Slot panel with naming | **[Missing]** | `client/src/pages/admin/calendar.tsx` | ❌ No slot naming UI |
+| 4. Create session from slot | **[Partially]** | `client/src/pages/admin/calendar.tsx` | ⚠️ Exists but NO JKT timezone |
+| 5. Session details (24h JKT) | **[Needs Fix]** | `client/src/pages/admin/calendar.tsx` | ❌ No JKT timezone imports |
+| 6. Settings-driven hours | **[Missing]** | `client/src/pages/admin/calendar.tsx:33` | ❌ HOURS hardcoded, no settings fetch |
+| 7. Assign photographers | [Implemented] | `client/src/pages/admin/calendar.tsx:146-169` | ✅ Has 409 handling |
+| 8. Guidance & tips | **[Needs Fix]** | `client/src/pages/admin/calendar.tsx:119-121` | ⚠️ Exists but needs multi-session text |
+| 9. Mobile responsive | **[Needs Fix]** | `client/src/pages/admin/calendar.tsx` | ⚠️ Basic layout exists, needs scroll |
+| 10. Navigation/breadcrumbs | **[Needs Fix]** | `client/src/pages/admin/layout.tsx:20-22` | ⚠️ Has "Back to Site" but no Project↔Calendar |
 
 ---
 
