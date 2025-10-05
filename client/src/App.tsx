@@ -11,6 +11,7 @@ import AdminPricing from "@/pages/admin/pricing";
 import AdminOrders from "@/pages/admin/orders";
 import AdminPhotographers from "@/pages/admin/photographers";
 import AdminCalendar from "@/pages/admin/calendar";
+import AdminSettings from "@/pages/admin/settings";
 import NotFound from "@/pages/not-found";
 
 function Router() {
@@ -27,6 +28,7 @@ function Router() {
       <Route path="/dashboard-admin/orders" component={AdminOrders} />
       <Route path="/dashboard-admin/photographers" component={AdminPhotographers} />
       <Route path="/dashboard-admin/calendar" component={AdminCalendar} />
+      <Route path="/dashboard-admin/settings" component={AdminSettings} />
       <Route component={NotFound} />
     </Switch>
   );

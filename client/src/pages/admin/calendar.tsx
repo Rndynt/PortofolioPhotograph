@@ -1,8 +1,9 @@
 import { useState, useMemo, useEffect } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { apiRequest, queryClient } from "@/lib/queryClient";
-import type { Session, Photographer, SessionAssignment, Project, Order } from "@shared/schema";
+import type { Session, Photographer, SessionAssignment, Project, Order, AppSettings, CalendarSlot } from "@shared/schema";
 import { insertSessionSchema } from "@shared/schema";
+import { JKT_TZ, formatJkt, fromJktToUtc, fromUtcToJkt, toJktHour } from '@shared/datetime';
 import AdminLayout from "./layout";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -30,7 +31,6 @@ interface SessionWithDetails extends Session {
   order?: Order | null;
 }
 
-const HOURS = Array.from({ length: 24 }, (_, i) => i);
 const DAYS_OF_WEEK = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
 
 const createSessionFormSchema = insertSessionSchema.extend({
@@ -142,6 +142,33 @@ export default function AdminCalendar() {
   const { data: orders = [] } = useQuery<Order[]>({
     queryKey: ['/api/orders'],
   });
+
+  const { data: settings } = useQuery<AppSettings>({
+    queryKey: ['appSettings'],
+    queryFn: async () => {
+      const response = await fetch('/api/settings/app');
+      if (!response.ok) throw new Error('Failed to fetch settings');
+      return response.json();
+    },
+  });
+
+  const weekStart = weekDates[0].toISOString().split('T')[0];
+  const weekEnd = weekDates[6].toISOString().split('T')[0];
+
+  const { data: calendarSlots = [] } = useQuery<CalendarSlot[]>({
+    queryKey: ['calendarSlots', { from: weekStart, to: weekEnd }],
+    queryFn: async () => {
+      const response = await fetch(`/api/calendar/slots?from=${weekStart}&to=${weekEnd}`);
+      if (!response.ok) throw new Error('Failed to fetch calendar slots');
+      return response.json();
+    },
+  });
+
+  const calendarHours = useMemo(() => {
+    const start = settings?.calendarStartHour ?? 6;
+    const end = settings?.calendarEndHour ?? 20;
+    return Array.from({ length: end - start }, (_, i) => start + i);
+  }, [settings]);
 
   const updateSessionMutation = useMutation({
     mutationFn: async ({ id, data }: { id: string; data: any }) => {
@@ -1021,7 +1048,8 @@ export default function AdminCalendar() {
   today.setHours(0, 0, 0, 0);
   const now = new Date();
   const currentHour = now.getHours() + now.getMinutes() / 60;
-  const nowLinePosition = currentHour * 60;
+  const calendarStartHour = settings?.calendarStartHour ?? 6;
+  const nowLinePosition = (currentHour - calendarStartHour) * 60;
 
   return (
     <AdminLayout activeTab="calendar">
@@ -1071,7 +1099,7 @@ export default function AdminCalendar() {
                     <h3 className="font-semibold text-blue-900">Get Started with Your Calendar</h3>
                   </div>
                   <ul className="space-y-1 text-sm text-blue-800 ml-7">
-                    <li>• Click any time slot to create a session</li>
+                    <li>• Tap any time slot to create a session. Slots can contain multiple projects.</li>
                     <li>• Click on a session to view details and assign photographers</li>
                     <li>• Sessions starting soon will pulse to grab your attention</li>
                     <li>• Use the photographer filter to view specific schedules</li>
@@ -1114,12 +1142,12 @@ export default function AdminCalendar() {
 
             <div className="flex">
               <div className="w-16 flex-shrink-0 border-r bg-gray-50">
-                {HOURS.map(hour => (
+                {calendarHours.map(hour => (
                   <div 
                     key={hour} 
                     className="h-[60px] border-b text-xs text-gray-500 px-2 py-1 text-right"
                   >
-                    {hour}:00
+                    {String(hour).padStart(2, '0')}:00
                   </div>
                 ))}
               </div>
@@ -1136,12 +1164,12 @@ export default function AdminCalendar() {
                     className={`flex-1 relative border-r last:border-r-0 ${isToday ? 'bg-blue-50/30' : isWeekend ? 'bg-gray-50/50' : ''}`}
                     data-testid={`day-column-${dayIndex}`}
                   >
-                    {HOURS.map(hour => (
+                    {calendarHours.map(hour => (
                       <div 
                         key={hour} 
                         className="h-[60px] border-b cursor-pointer hover:bg-blue-50/50 transition-colors"
                         onClick={() => handleTimeSlotClick(date, hour)}
-                        data-testid={`timeslot-${dayIndex}-${hour}`}
+                        data-testid={`slot-cell-${key}-${hour}`}
                       />
                     ))}
                     
@@ -1172,13 +1200,10 @@ export default function AdminCalendar() {
                             e.stopPropagation();
                             handleSessionClick(session);
                           }}
-                          data-testid={`session-${session.id}`}
+                          data-testid={`session-card-${session.id}`}
                         >
                           <div className="font-semibold truncate">
-                            {new Date(session.startAt).toLocaleTimeString('en-US', { 
-                              hour: 'numeric', 
-                              minute: '2-digit' 
-                            })}
+                            {formatJkt(new Date(session.startAt), 'HH:mm')}
                           </div>
                           {session.location && (
                             <div className="text-xs opacity-90 truncate">📍 {session.location}</div>
