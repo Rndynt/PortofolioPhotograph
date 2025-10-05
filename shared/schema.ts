@@ -171,6 +171,27 @@ export const sessionAssignments = pgTable("session_assignments", {
   createdAt: timestamp("created_at").defaultNow().notNull(),
 });
 
+export const calendarSlots = pgTable("calendar_slots", {
+  id: text("id").primaryKey().$defaultFn(() => cuid()),
+  localDate: date("local_date").notNull(),
+  hour: integer("hour").notNull(),
+  label: text("label"),
+  notes: text("notes"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+}, (table) => ({
+  uniqueDateHour: sql`UNIQUE (${table.localDate}, ${table.hour})`,
+}));
+
+export const appSettings = pgTable("app_settings", {
+  id: text("id").primaryKey().$defaultFn(() => cuid()),
+  timezone: text("timezone").notNull().default("Asia/Jakarta"),
+  calendarStartHour: integer("calendar_start_hour").notNull().default(6),
+  calendarEndHour: integer("calendar_end_hour").notNull().default(20),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+});
+
 export const insertCategorySchema = createInsertSchema(categories).omit({
   id: true,
   createdAt: true,
@@ -231,6 +252,18 @@ export const insertSessionAssignmentSchema = createInsertSchema(sessionAssignmen
   createdAt: true,
 });
 
+export const insertCalendarSlotSchema = createInsertSchema(calendarSlots).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
+export const insertAppSettingsSchema = createInsertSchema(appSettings).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
 export type InsertCategory = z.infer<typeof insertCategorySchema>;
 export type Category = typeof categories.$inferSelect;
 
@@ -263,3 +296,9 @@ export type Session = typeof sessions.$inferSelect;
 
 export type InsertSessionAssignment = z.infer<typeof insertSessionAssignmentSchema>;
 export type SessionAssignment = typeof sessionAssignments.$inferSelect;
+
+export type InsertCalendarSlot = z.infer<typeof insertCalendarSlotSchema>;
+export type CalendarSlot = typeof calendarSlots.$inferSelect;
+
+export type InsertAppSettings = z.infer<typeof insertAppSettingsSchema>;
+export type AppSettings = typeof appSettings.$inferSelect;
