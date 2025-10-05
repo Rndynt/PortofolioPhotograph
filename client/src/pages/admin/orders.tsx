@@ -210,10 +210,11 @@ export default function AdminOrders() {
 
   const ordersWithDetails: OrderWithDetails[] = (orders || []).map(order => {
     const category = categories?.find(c => c.id === order.categoryId);
+    const tier = order.priceTierId ? priceTiers?.find(t => t.id === order.priceTierId) : undefined;
     return {
       ...order,
       categoryName: category?.name,
-      tierName: order.priceTierId ? "Custom Tier" : undefined,
+      tierName: tier?.name,
     };
   });
 
