@@ -28,6 +28,8 @@ export const priceTiers = pgTable("price_tiers", {
   name: text("name").notNull(),
   price: integer("price").notNull(),
   description: text("description"),
+  sessionCount: integer("session_count").notNull().default(1),
+  sessionDuration: integer("session_duration").notNull().default(2),
   isActive: boolean("is_active").notNull().default(true),
   sortOrder: integer("sort_order").notNull().default(0),
   createdAt: timestamp("created_at").defaultNow().notNull(),

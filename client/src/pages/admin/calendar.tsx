@@ -1007,17 +1007,7 @@ export default function AdminCalendar() {
                 <div>
                   <h3 className="text-sm font-medium text-gray-500 mb-2">Date & Time</h3>
                   <p className="text-base" data-testid="text-session-time">
-                    {new Date(selectedSession.startAt).toLocaleString('en-US', {
-                      weekday: 'long',
-                      year: 'numeric',
-                      month: 'long',
-                      day: 'numeric',
-                      hour: 'numeric',
-                      minute: '2-digit',
-                    })} - {new Date(selectedSession.endAt).toLocaleTimeString('en-US', {
-                      hour: 'numeric',
-                      minute: '2-digit',
-                    })}
+                    {formatJkt(new Date(selectedSession.startAt), 'EEEE, dd MMMM yyyy, HH:mm')} - {formatJkt(new Date(selectedSession.endAt), 'HH:mm')}
                   </p>
                 </div>
 
@@ -1324,7 +1314,7 @@ export default function AdminCalendar() {
 
     const slotDateKey = selectedSlot.date.toISOString().split('T')[0];
     const currentSlot = calendarSlots.find(
-      s => s.date === slotDateKey && s.hour === selectedSlot.hour
+      s => s.localDate === slotDateKey && s.hour === selectedSlot.hour
     );
 
     useEffect(() => {
@@ -1623,7 +1613,7 @@ export default function AdminCalendar() {
                     {calendarHours.map(hour => {
                       const slotKey = `${key}-${hour}`;
                       const currentSlot = calendarSlots.find(
-                        s => s.date === key && s.hour === hour
+                        s => s.localDate === key && s.hour === hour
                       );
                       const slotSessions = weekSessions.filter(session =>
                         doesSessionOverlapSlot(session, date, hour)
