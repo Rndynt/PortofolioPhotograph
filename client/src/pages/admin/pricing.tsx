@@ -84,6 +84,8 @@ export default function AdminPricing() {
       name: "",
       price: 0,
       description: null,
+      sessionCount: 1,
+      sessionDuration: 2,
       isActive: true,
       sortOrder: 0,
     },
@@ -203,6 +205,8 @@ export default function AdminPricing() {
       name: tier.name,
       price: tier.price,
       description: tier.description,
+      sessionCount: tier.sessionCount,
+      sessionDuration: tier.sessionDuration,
       isActive: tier.isActive,
       sortOrder: tier.sortOrder,
     });
@@ -539,6 +543,50 @@ export default function AdminPricing() {
 
                       <FormField
                         control={tierForm.control}
+                        name="sessionCount"
+                        render={({ field }) => (
+                          <FormItem>
+                            <FormLabel>Session Count *</FormLabel>
+                            <FormControl>
+                              <Input 
+                                type="number" 
+                                {...field} 
+                                onChange={(e) => field.onChange(parseInt(e.target.value))}
+                                placeholder="1" 
+                                min="1"
+                                data-testid="input-tier-session-count"
+                              />
+                            </FormControl>
+                            <FormDescription>Number of sessions included in this package</FormDescription>
+                            <FormMessage />
+                          </FormItem>
+                        )}
+                      />
+
+                      <FormField
+                        control={tierForm.control}
+                        name="sessionDuration"
+                        render={({ field }) => (
+                          <FormItem>
+                            <FormLabel>Session Duration (hours) *</FormLabel>
+                            <FormControl>
+                              <Input 
+                                type="number" 
+                                {...field} 
+                                onChange={(e) => field.onChange(parseInt(e.target.value))}
+                                placeholder="2" 
+                                min="1"
+                                data-testid="input-tier-session-duration"
+                              />
+                            </FormControl>
+                            <FormDescription>Duration of each session in hours</FormDescription>
+                            <FormMessage />
+                          </FormItem>
+                        )}
+                      />
+
+                      <FormField
+                        control={tierForm.control}
                         name="description"
                         render={({ field }) => (
                           <FormItem>
@@ -647,6 +695,8 @@ export default function AdminPricing() {
                     <TableRow>
                       <TableHead>Name</TableHead>
                       <TableHead>Price</TableHead>
+                      <TableHead>Sessions</TableHead>
+                      <TableHead>Duration/Session</TableHead>
                       <TableHead>Description</TableHead>
                       <TableHead>Status</TableHead>
                       <TableHead>Sort Order</TableHead>
@@ -658,6 +708,8 @@ export default function AdminPricing() {
                       <TableRow key={tier.id} data-testid={`row-tier-${tier.id}`}>
                         <TableCell className="font-medium">{tier.name}</TableCell>
                         <TableCell>{formatIDR(tier.price)}</TableCell>
+                        <TableCell>{tier.sessionCount}x</TableCell>
+                        <TableCell>{tier.sessionDuration}h</TableCell>
                         <TableCell>{tier.description || "-"}</TableCell>
                         <TableCell>
                           <Badge variant={tier.isActive ? "default" : "secondary"} data-testid={`badge-tier-status-${tier.id}`}>
