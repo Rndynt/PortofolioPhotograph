@@ -593,6 +593,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.post("/api/orders/:id/payments", async (req, res) => {
     try {
       const { id: orderId } = req.params;
+      console.log("Received payment data:", JSON.stringify(req.body, null, 2));
       const validatedData = manualPaymentSchema.parse(req.body);
       
       // Verify order exists
@@ -624,8 +625,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
       res.status(201).json(payment[0]);
     } catch (error) {
       if (error instanceof z.ZodError) {
+        console.error("Validation error:", error.errors);
         return res.status(400).json({ message: "Invalid payment data", errors: error.errors });
       }
+      console.error("Error creating payment:", error);
       res.status(500).json({ message: "Failed to create manual payment" });
     }
   });

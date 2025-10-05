@@ -1192,7 +1192,7 @@ function ManualPaymentForm({
       provider: "cash",
       status: "settlement",
       type: "DOWN_PAYMENT",
-      grossAmount: 0,
+      grossAmount: undefined as any,
       paidAt: new Date().toISOString().slice(0, 16),
       notes: "",
     },
@@ -1279,10 +1279,13 @@ function ManualPaymentForm({
               <FormLabel>Amount (IDR)</FormLabel>
               <FormControl>
                 <Input 
-                  {...field} 
                   type="number" 
-                  placeholder="500000" 
-                  onChange={(e) => field.onChange(parseFloat(e.target.value))}
+                  placeholder="500000"
+                  value={field.value || ''}
+                  onChange={(e) => {
+                    const value = e.target.value === '' ? 0 : parseFloat(e.target.value);
+                    field.onChange(isNaN(value) ? 0 : value);
+                  }}
                   data-testid="input-payment-amount"
                 />
               </FormControl>
