@@ -668,15 +668,12 @@ export default function AdminCalendar() {
       if (selectedTimeSlot && dialogOpen) {
         const startDateTime = new Date(selectedTimeSlot.date);
         startDateTime.setHours(selectedTimeSlot.hour, 0, 0, 0);
-        
-        const endDateTime = new Date(startDateTime);
-        endDateTime.setHours(startDateTime.getHours() + 2);
 
         form.reset({
           projectId: "",
           orderId: null,
           startAt: startDateTime.toISOString().slice(0, 16),
-          endAt: endDateTime.toISOString().slice(0, 16),
+          endAt: "",
           location: "",
           notes: "",
           status: "PLANNED",
@@ -687,13 +684,13 @@ export default function AdminCalendar() {
     const selectedProject = projects.find(p => p.id === form.watch("projectId"));
     
     useMemo(() => {
-      if (selectedProject?.orderId) {
+      if (selectedProject?.orderId && selectedTimeSlot) {
         form.setValue("orderId", selectedProject.orderId);
         
         const order = orders.find(o => o.id === selectedProject.orderId);
         if (order?.priceTierId) {
           const tier = priceTiers.find(t => t.id === order.priceTierId);
-          if (tier && selectedTimeSlot) {
+          if (tier) {
             const startDateTime = new Date(selectedTimeSlot.date);
             startDateTime.setHours(selectedTimeSlot.hour, 0, 0, 0);
             
@@ -704,7 +701,7 @@ export default function AdminCalendar() {
           }
         }
       }
-    }, [selectedProject]);
+    }, [selectedProject, selectedTimeSlot]);
 
     const onSubmit = (data: z.infer<typeof createSessionFormSchema>) => {
       createSessionMutation.mutate(data);
@@ -1005,19 +1002,48 @@ export default function AdminCalendar() {
                 </div>
 
                 {selectedSession.order && (
-                  <div>
-                    <h3 className="text-sm font-medium text-gray-500 mb-2">Order</h3>
-                    <div className="flex items-center justify-between">
-                      <p className="text-base" data-testid="text-order-customer">
-                        {selectedSession.order.customerName}
-                      </p>
-                      <Link href={`/admin/orders`}>
-                        <Button variant="ghost" size="sm" data-testid="link-order">
-                          View Order <ExternalLink className="ml-1 h-3 w-3" />
-                        </Button>
-                      </Link>
+                  <>
+                    <div>
+                      <h3 className="text-sm font-medium text-gray-500 mb-2">Order</h3>
+                      <div className="flex items-center justify-between">
+                        <p className="text-base" data-testid="text-order-customer">
+                          {selectedSession.order.customerName}
+                        </p>
+                        <Link href={`/admin/orders`}>
+                          <Button variant="ghost" size="sm" data-testid="link-order">
+                            View Order <ExternalLink className="ml-1 h-3 w-3" />
+                          </Button>
+                        </Link>
+                      </div>
                     </div>
-                  </div>
+
+                    {selectedSession.order.priceTierId && (() => {
+                      const tier = priceTiers.find(t => t.id === selectedSession.order?.priceTierId);
+                      return tier ? (
+                        <div>
+                          <h3 className="text-sm font-medium text-gray-500 mb-2">Package Details</h3>
+                          <div className="bg-gray-50 p-3 rounded-lg space-y-2">
+                            <p className="text-base font-semibold" data-testid="text-tier-name">
+                              {tier.name}
+                            </p>
+                            <div className="flex gap-4 text-sm text-gray-600">
+                              <span data-testid="text-tier-sessions">
+                                📸 {tier.sessionCount}x Session{tier.sessionCount > 1 ? 's' : ''}
+                              </span>
+                              <span data-testid="text-tier-duration">
+                                ⏱️ {tier.sessionDuration}h per session
+                              </span>
+                            </div>
+                            {tier.description && (
+                              <p className="text-sm text-gray-600 mt-1" data-testid="text-tier-description">
+                                {tier.description}
+                              </p>
+                            )}
+                          </div>
+                        </div>
+                      ) : null;
+                    })()}
+                  </>
                 )}
 
                 <Separator />

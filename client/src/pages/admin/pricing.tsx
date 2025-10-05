@@ -28,7 +28,10 @@ const categoryFormSchema = insertCategorySchema.extend({
 
 type CategoryFormData = z.infer<typeof categoryFormSchema>;
 
-const tierFormSchema = insertPriceTierSchema;
+const tierFormSchema = insertPriceTierSchema.extend({
+  sessionCount: z.number().int().min(1, "Session count must be at least 1"),
+  sessionDuration: z.number().int().min(1, "Session duration must be at least 1 hour"),
+});
 type TierFormData = z.infer<typeof tierFormSchema>;
 
 const generateSlug = (name: string) => {
