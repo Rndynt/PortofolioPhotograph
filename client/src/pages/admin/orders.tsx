@@ -149,7 +149,7 @@ type OfflineOrderFormData = z.infer<typeof offlineOrderSchema>;
 const manualPaymentSchema = z.object({
   provider: z.enum(["cash", "bank_transfer", "midtrans"]),
   status: z.enum(["pending", "settlement", "deny", "expire", "cancel"]),
-  grossAmount: z.number().positive("Amount must be positive"),
+  grossAmount: z.coerce.number().positive("Amount must be positive"),
   type: z.enum(["DOWN_PAYMENT", "FULL_PAYMENT"]),
   paidAt: z.string().optional(),
   notes: z.string().optional(),
@@ -1192,7 +1192,7 @@ function ManualPaymentForm({
       provider: "cash",
       status: "settlement",
       type: "DOWN_PAYMENT",
-      grossAmount: undefined as any,
+      grossAmount: "" as any,
       paidAt: new Date().toISOString().slice(0, 16),
       notes: "",
     },
@@ -1279,13 +1279,9 @@ function ManualPaymentForm({
               <FormLabel>Amount (IDR)</FormLabel>
               <FormControl>
                 <Input 
+                  {...field}
                   type="number" 
                   placeholder="500000"
-                  value={field.value || ''}
-                  onChange={(e) => {
-                    const value = e.target.value === '' ? 0 : parseFloat(e.target.value);
-                    field.onChange(isNaN(value) ? 0 : value);
-                  }}
                   data-testid="input-payment-amount"
                 />
               </FormControl>
