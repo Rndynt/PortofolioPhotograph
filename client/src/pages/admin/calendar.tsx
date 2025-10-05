@@ -1,7 +1,7 @@
 import { useState, useMemo, useEffect } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { apiRequest, queryClient } from "@/lib/queryClient";
-import type { Session, Photographer, SessionAssignment, Project, Order, AppSettings, CalendarSlot, Category } from "@shared/schema";
+import type { Session, Photographer, SessionAssignment, Project, Order, AppSettings, CalendarSlot, Category, PriceTier } from "@shared/schema";
 import { insertSessionSchema } from "@shared/schema";
 import { JKT_TZ, formatJkt, fromJktToUtc, fromUtcToJkt, toJktHour } from '@shared/datetime';
 import AdminLayout from "./layout";
@@ -165,6 +165,10 @@ export default function AdminCalendar() {
 
   const { data: categories = [] } = useQuery<Category[]>({
     queryKey: ['/api/categories'],
+  });
+
+  const { data: priceTiers = [] } = useQuery<PriceTier[]>({
+    queryKey: ['/api/price-tiers'],
   });
 
   const { data: settings } = useQuery<AppSettings>({
@@ -685,6 +689,20 @@ export default function AdminCalendar() {
     useMemo(() => {
       if (selectedProject?.orderId) {
         form.setValue("orderId", selectedProject.orderId);
+        
+        const order = orders.find(o => o.id === selectedProject.orderId);
+        if (order?.priceTierId) {
+          const tier = priceTiers.find(t => t.id === order.priceTierId);
+          if (tier && selectedTimeSlot) {
+            const startDateTime = new Date(selectedTimeSlot.date);
+            startDateTime.setHours(selectedTimeSlot.hour, 0, 0, 0);
+            
+            const endDateTime = new Date(startDateTime);
+            endDateTime.setHours(startDateTime.getHours() + tier.sessionDuration);
+            
+            form.setValue("endAt", endDateTime.toISOString().slice(0, 16));
+          }
+        }
       }
     }, [selectedProject]);
 
