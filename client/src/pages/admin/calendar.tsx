@@ -1,7 +1,7 @@
 import { useState, useMemo, useEffect } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { apiRequest, queryClient } from "@/lib/queryClient";
-import type { Session, Photographer, SessionAssignment, Project, Order, AppSettings, CalendarSlot } from "@shared/schema";
+import type { Session, Photographer, SessionAssignment, Project, Order, AppSettings, CalendarSlot, Category } from "@shared/schema";
 import { insertSessionSchema } from "@shared/schema";
 import { JKT_TZ, formatJkt, fromJktToUtc, fromUtcToJkt, toJktHour } from '@shared/datetime';
 import AdminLayout from "./layout";
@@ -11,7 +11,7 @@ import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useToast } from "@/hooks/use-toast";
-import { ChevronLeft, ChevronRight, Calendar as CalendarIcon, User, Plus, Edit, Trash2, UserPlus, X, ExternalLink } from "lucide-react";
+import { ChevronLeft, ChevronRight, Calendar as CalendarIcon, User, Plus, Edit, Trash2, UserPlus, X, ExternalLink, ArrowUp, ArrowDown, CheckCircle2 } from "lucide-react";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle, SheetFooter } from "@/components/ui/sheet";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
@@ -137,6 +137,8 @@ export default function AdminCalendar() {
   const [helperTipDismissed, setHelperTipDismissed] = useState(() => {
     return localStorage.getItem('calendar-helper-dismissed') === 'true';
   });
+  const [addProjectsDialogOpen, setAddProjectsDialogOpen] = useState(false);
+  const [selectedProjects, setSelectedProjects] = useState<string[]>([]);
   const { toast } = useToast();
 
   const weekDates = useMemo(() => getWeekDates(currentDate), [currentDate]);
@@ -159,6 +161,10 @@ export default function AdminCalendar() {
 
   const { data: orders = [] } = useQuery<Order[]>({
     queryKey: ['/api/orders'],
+  });
+
+  const { data: categories = [] } = useQuery<Category[]>({
+    queryKey: ['/api/categories'],
   });
 
   const { data: settings } = useQuery<AppSettings>({
@@ -313,7 +319,8 @@ export default function AdminCalendar() {
 
   const handleTimeSlotClick = (date: Date, hour: number) => {
     setSelectedSlot({ date, hour });
-    setSlotPanelOpen(true);
+    setSelectedProjects([]);
+    setAddProjectsDialogOpen(true);
   };
 
   const handleSessionClick = (session: SessionWithDetails) => {
@@ -390,6 +397,253 @@ export default function AdminCalendar() {
 
   const goToToday = () => {
     setCurrentDate(new Date());
+  };
+
+  const AddProjectsToSlotDialog = () => {
+    const [projectOrder, setProjectOrder] = useState<string[]>([]);
+
+    useEffect(() => {
+      if (addProjectsDialogOpen) {
+        setProjectOrder([]);
+      }
+    }, [addProjectsDialogOpen]);
+
+    if (!selectedSlot) return null;
+
+    const slotStartJkt = new Date(selectedSlot.date);
+    slotStartJkt.setHours(selectedSlot.hour, 0, 0, 0);
+    const slotStartJktTime = fromUtcToJkt(slotStartJkt);
+    const slotHourJkt = slotStartJktTime.getHours();
+    const slotTitle = `${formatJkt(slotStartJktTime, 'EEE, MMM dd, yyyy')} ${String(slotHourJkt).padStart(2, '0')}:00`;
+
+    const handleAddProject = (projectId: string) => {
+      if (!projectOrder.includes(projectId)) {
+        setProjectOrder([...projectOrder, projectId]);
+      }
+    };
+
+    const handleRemoveProject = (projectId: string) => {
+      setProjectOrder(projectOrder.filter(id => id !== projectId));
+    };
+
+    const handleMoveUp = (index: number) => {
+      if (index > 0) {
+        const newOrder = [...projectOrder];
+        [newOrder[index - 1], newOrder[index]] = [newOrder[index], newOrder[index - 1]];
+        setProjectOrder(newOrder);
+      }
+    };
+
+    const handleMoveDown = (index: number) => {
+      if (index < projectOrder.length - 1) {
+        const newOrder = [...projectOrder];
+        [newOrder[index], newOrder[index + 1]] = [newOrder[index + 1], newOrder[index]];
+        setProjectOrder(newOrder);
+      }
+    };
+
+    const calculateProjectTimes = () => {
+      const results: Array<{
+        projectId: string;
+        project: Project;
+        category: Category | undefined;
+        startAt: Date;
+        endAt: Date;
+        duration: number;
+      }> = [];
+
+      let currentStartTime = new Date(selectedSlot.date);
+      currentStartTime.setHours(selectedSlot.hour, 0, 0, 0);
+
+      for (const projectId of projectOrder) {
+        const project = projects.find(p => p.id === projectId);
+        if (!project) continue;
+
+        const category = categories.find(c => c.id === project.categoryId);
+        const durationHours = category?.durationHours || 2;
+
+        const endTime = new Date(currentStartTime);
+        endTime.setHours(currentStartTime.getHours() + durationHours);
+
+        results.push({
+          projectId,
+          project,
+          category,
+          startAt: new Date(currentStartTime),
+          endAt: new Date(endTime),
+          duration: durationHours,
+        });
+
+        currentStartTime = new Date(endTime);
+      }
+
+      return results;
+    };
+
+    const projectTimes = calculateProjectTimes();
+
+    const handleSave = async () => {
+      if (projectOrder.length === 0) {
+        toast({ title: "Please select at least one project", variant: "destructive" });
+        return;
+      }
+
+      try {
+        for (const item of projectTimes) {
+          const startAtUtc = fromJktToUtc(item.startAt).toISOString();
+          const endAtUtc = fromJktToUtc(item.endAt).toISOString();
+
+          await apiRequest('POST', '/api/sessions', {
+            projectId: item.projectId,
+            orderId: item.project.orderId || null,
+            startAt: startAtUtc,
+            endAt: endAtUtc,
+            location: null,
+            notes: null,
+            status: "PLANNED",
+          });
+        }
+
+        queryClient.invalidateQueries({ queryKey: ['/api/sessions'] });
+        toast({ title: `Successfully created ${projectOrder.length} session${projectOrder.length > 1 ? 's' : ''}` });
+        setAddProjectsDialogOpen(false);
+        setProjectOrder([]);
+      } catch (error: any) {
+        const message = error.message || "";
+        if (message.includes("409") || message.includes("conflict")) {
+          toast({ 
+            title: "Scheduling conflict", 
+            description: "There is a conflict with another session at this time",
+            variant: "destructive" 
+          });
+        } else {
+          toast({ title: "Failed to create sessions", variant: "destructive" });
+        }
+      }
+    };
+
+    const availableProjects = projects.filter(p => !projectOrder.includes(p.id));
+
+    return (
+      <Dialog open={addProjectsDialogOpen} onOpenChange={setAddProjectsDialogOpen}>
+        <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto" data-testid="dialog-add-projects-slot">
+          <DialogHeader>
+            <DialogTitle>Add Projects to Slot</DialogTitle>
+            <DialogDescription>
+              Slot: {slotTitle} (Jakarta Time)
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-6">
+            <div>
+              <label className="block text-sm font-medium mb-2">Select Project</label>
+              <Select 
+                onValueChange={handleAddProject}
+                value=""
+              >
+                <SelectTrigger data-testid="select-add-project">
+                  <SelectValue placeholder="Choose a project to add..." />
+                </SelectTrigger>
+                <SelectContent>
+                  {availableProjects.map(project => {
+                    const category = categories.find(c => c.id === project.categoryId);
+                    return (
+                      <SelectItem key={project.id} value={project.id}>
+                        {project.title} {category && `(${category.name})`}
+                      </SelectItem>
+                    );
+                  })}
+                </SelectContent>
+              </Select>
+            </div>
+
+            {projectOrder.length > 0 && (
+              <>
+                <Separator />
+                <div>
+                  <h3 className="text-sm font-medium mb-3">Session Preview</h3>
+                  <div className="space-y-2">
+                    {projectTimes.map((item, index) => {
+                      const startJkt = fromUtcToJkt(fromJktToUtc(item.startAt));
+                      const endJkt = fromUtcToJkt(fromJktToUtc(item.endAt));
+                      
+                      return (
+                        <div 
+                          key={item.projectId}
+                          className="flex items-center gap-3 p-3 bg-blue-50 border border-blue-200 rounded-lg"
+                          data-testid={`preview-project-${item.projectId}`}
+                        >
+                          <div className="flex-1">
+                            <div className="font-medium text-sm">{item.project.title}</div>
+                            <div className="text-xs text-gray-600 mt-1">
+                              {item.category?.name || 'No category'} • {item.duration} hour{item.duration !== 1 ? 's' : ''}
+                            </div>
+                            <div className="text-xs font-mono mt-1 text-blue-700">
+                              {formatJkt(startJkt, 'HH:mm')} - {formatJkt(endJkt, 'HH:mm')}
+                            </div>
+                          </div>
+                          <div className="flex gap-1">
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              onClick={() => handleMoveUp(index)}
+                              disabled={index === 0}
+                              data-testid={`button-move-up-${index}`}
+                            >
+                              <ArrowUp className="h-3 w-3" />
+                            </Button>
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              onClick={() => handleMoveDown(index)}
+                              disabled={index === projectOrder.length - 1}
+                              data-testid={`button-move-down-${index}`}
+                            >
+                              <ArrowDown className="h-3 w-3" />
+                            </Button>
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              onClick={() => handleRemoveProject(item.projectId)}
+                              data-testid={`button-remove-${item.projectId}`}
+                            >
+                              <X className="h-3 w-3" />
+                            </Button>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              </>
+            )}
+          </div>
+
+          <DialogFooter>
+            <Button 
+              type="button" 
+              variant="outline" 
+              onClick={() => {
+                setAddProjectsDialogOpen(false);
+                setProjectOrder([]);
+              }}
+              data-testid="button-cancel-add-projects"
+            >
+              Cancel
+            </Button>
+            <Button 
+              type="button" 
+              onClick={handleSave}
+              disabled={projectOrder.length === 0}
+              data-testid="button-save-slot-projects"
+            >
+              <CheckCircle2 className="mr-2 h-4 w-4" />
+              Add {projectOrder.length} Session{projectOrder.length !== 1 ? 's' : ''} to Slot
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+    );
   };
 
   const CreateSessionDialog = () => {
@@ -1537,6 +1791,7 @@ export default function AdminCalendar() {
           </CardContent>
         </Card>
 
+        <AddProjectsToSlotDialog />
         <CreateSessionDialog />
         <SessionDetailsSheet />
         <SlotPanelSheet />
