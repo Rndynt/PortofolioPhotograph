@@ -107,6 +107,22 @@ function isSessionStartingSoon(session: Session): boolean {
   return diffMinutes > 0 && diffMinutes <= 15;
 }
 
+function doesSessionOverlapSlot(session: Session, slotDate: Date, slotHour: number): boolean {
+  const sessionStartJkt = fromUtcToJkt(new Date(session.startAt));
+  const sessionEndJkt = fromUtcToJkt(new Date(session.endAt));
+  
+  const slotStart = new Date(slotDate);
+  slotStart.setHours(slotHour, 0, 0, 0);
+  const slotStartJkt = fromUtcToJkt(slotStart);
+  const slotStartHourNum = slotStartJkt.getHours();
+  const slotEndHourNum = slotStartHourNum + 1;
+  
+  const sessionStartHour = sessionStartJkt.getHours() + sessionStartJkt.getMinutes() / 60;
+  const sessionEndHour = sessionEndJkt.getHours() + sessionEndJkt.getMinutes() / 60;
+  
+  return sessionStartHour < slotEndHourNum && sessionEndHour > slotStartHourNum;
+}
+
 export default function AdminCalendar() {
   const [currentDate, setCurrentDate] = useState(new Date());
   const [photographerFilter, setPhotographerFilter] = useState<string>("all");
@@ -114,6 +130,8 @@ export default function AdminCalendar() {
   const [selectedTimeSlot, setSelectedTimeSlot] = useState<{ date: Date; hour: number } | null>(null);
   const [selectedSession, setSelectedSession] = useState<SessionWithDetails | null>(null);
   const [sheetOpen, setSheetOpen] = useState(false);
+  const [slotPanelOpen, setSlotPanelOpen] = useState(false);
+  const [selectedSlot, setSelectedSlot] = useState<{ date: Date; hour: number } | null>(null);
   const [editMode, setEditMode] = useState(false);
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [helperTipDismissed, setHelperTipDismissed] = useState(() => {
@@ -281,9 +299,21 @@ export default function AdminCalendar() {
     }
   });
 
+  const updateSlotNameMutation = useMutation({
+    mutationFn: async (slots: Array<{ localDate: string; hour: number; label?: string }>) => {
+      await apiRequest('PATCH', '/api/calendar/slots', slots);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['calendarSlots'] });
+    },
+    onError: () => {
+      toast({ title: "Failed to update slot name", variant: "destructive" });
+    }
+  });
+
   const handleTimeSlotClick = (date: Date, hour: number) => {
-    setSelectedTimeSlot({ date, hour });
-    setDialogOpen(true);
+    setSelectedSlot({ date, hour });
+    setSlotPanelOpen(true);
   };
 
   const handleSessionClick = (session: SessionWithDetails) => {
@@ -1033,6 +1063,177 @@ export default function AdminCalendar() {
     );
   };
 
+  const SlotPanelSheet = () => {
+    const [slotName, setSlotName] = useState<string>("");
+
+    if (!selectedSlot) return null;
+
+    const slotDateKey = selectedSlot.date.toISOString().split('T')[0];
+    const currentSlot = calendarSlots.find(
+      s => s.date === slotDateKey && s.hour === selectedSlot.hour
+    );
+
+    useEffect(() => {
+      if (currentSlot) {
+        setSlotName(currentSlot.label || "");
+      } else {
+        setSlotName("");
+      }
+    }, [currentSlot]);
+
+    const overlappingSessions = sessionsWithPhotographers.filter(session =>
+      doesSessionOverlapSlot(session, selectedSlot.date, selectedSlot.hour)
+    );
+
+    const slotStartJkt = new Date(selectedSlot.date);
+    slotStartJkt.setHours(selectedSlot.hour, 0, 0, 0);
+    const slotStartJktTime = fromUtcToJkt(slotStartJkt);
+    const slotHourJkt = slotStartJktTime.getHours();
+    const slotTitle = `${formatJkt(slotStartJktTime, 'yyyy-MM-dd')} ${String(slotHourJkt).padStart(2, '0')}:00-${String(slotHourJkt + 1).padStart(2, '0')}:00`;
+
+    const handleSlotNameSave = () => {
+      updateSlotNameMutation.mutate([{
+        localDate: slotDateKey,
+        hour: selectedSlot.hour,
+        label: slotName || undefined,
+      }]);
+    };
+
+    const handleSlotNameBlur = () => {
+      if (slotName !== (currentSlot?.label || "")) {
+        handleSlotNameSave();
+      }
+    };
+
+    const handleSlotNameKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+      if (e.key === 'Enter') {
+        handleSlotNameSave();
+        e.currentTarget.blur();
+      }
+    };
+
+    const handleAddSession = () => {
+      const startDateTime = new Date(selectedSlot.date);
+      startDateTime.setHours(selectedSlot.hour, 0, 0, 0);
+      
+      const endDateTime = new Date(startDateTime);
+      endDateTime.setHours(startDateTime.getHours() + 2);
+
+      setSelectedTimeSlot({ date: selectedSlot.date, hour: selectedSlot.hour });
+      setSlotPanelOpen(false);
+      setDialogOpen(true);
+    };
+
+    return (
+      <Sheet open={slotPanelOpen} onOpenChange={setSlotPanelOpen}>
+        <SheetContent className="w-[500px] sm:w-[540px] overflow-y-auto" data-testid="sheet-slot-panel">
+          <SheetHeader>
+            <SheetTitle>Time Slot: {slotTitle}</SheetTitle>
+            <SheetDescription>
+              Manage slot details and view overlapping sessions
+            </SheetDescription>
+          </SheetHeader>
+
+          <div className="mt-6 space-y-6">
+            <div>
+              <label htmlFor="slot-name" className="block text-sm font-medium text-gray-700 mb-2">
+                Custom Slot Name
+              </label>
+              <Input
+                id="slot-name"
+                data-testid="slot-name-input"
+                value={slotName}
+                onChange={(e) => setSlotName(e.target.value)}
+                onBlur={handleSlotNameBlur}
+                onKeyDown={handleSlotNameKeyDown}
+                placeholder="e.g., Morning Shoots, Afternoon Portraits"
+              />
+            </div>
+
+            <Separator />
+
+            <div>
+              <h3 className="text-sm font-medium text-gray-700 mb-3">
+                Sessions in this slot ({overlappingSessions.length})
+              </h3>
+              
+              {overlappingSessions.length > 0 ? (
+                <div className="space-y-3">
+                  {overlappingSessions.map(session => {
+                    const sessionStartJkt = fromUtcToJkt(new Date(session.startAt));
+                    const sessionEndJkt = fromUtcToJkt(new Date(session.endAt));
+                    const statusColor = getStatusColor(session.status);
+
+                    return (
+                      <div
+                        key={session.id}
+                        data-testid={`session-card-${session.id}`}
+                        className="p-3 border rounded-lg cursor-pointer hover:bg-gray-50 transition-colors"
+                        onClick={() => {
+                          setSlotPanelOpen(false);
+                          handleSessionClick(session);
+                        }}
+                      >
+                        <div className="flex items-start justify-between mb-2">
+                          <div className="flex-1">
+                            <p className="font-semibold text-sm">
+                              {session.project?.title || "Unknown Project"}
+                            </p>
+                            <p className="text-xs text-gray-600 mt-1">
+                              {formatJkt(sessionStartJkt, 'HH:mm')} - {formatJkt(sessionEndJkt, 'HH:mm')}
+                            </p>
+                          </div>
+                          <Badge className={`${statusColor} text-white ml-2`}>
+                            {session.status}
+                          </Badge>
+                        </div>
+
+                        {session.photographers && session.photographers.length > 0 && (
+                          <div className="flex flex-wrap gap-1 mt-2">
+                            {session.photographers.map(p => (
+                              <div 
+                                key={p.id} 
+                                className="flex items-center gap-1 bg-gray-100 rounded px-2 py-0.5"
+                              >
+                                <Avatar className="h-4 w-4">
+                                  <AvatarFallback className="text-[8px]">
+                                    {getInitials(p.name)}
+                                  </AvatarFallback>
+                                </Avatar>
+                                <span className="text-xs">{p.name}</span>
+                              </div>
+                            ))}
+                          </div>
+                        )}
+
+                        {session.location && (
+                          <p className="text-xs text-gray-500 mt-2">📍 {session.location}</p>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+              ) : (
+                <p className="text-sm text-gray-500 italic">No sessions in this time slot</p>
+              )}
+            </div>
+
+            <Separator />
+
+            <Button
+              data-testid="button-add-session-slot"
+              onClick={handleAddSession}
+              className="w-full"
+            >
+              <Plus className="mr-2 h-4 w-4" />
+              Add Session
+            </Button>
+          </div>
+        </SheetContent>
+      </Sheet>
+    );
+  };
+
   if (sessionsLoading) {
     return (
       <AdminLayout activeTab="calendar">
@@ -1100,6 +1301,7 @@ export default function AdminCalendar() {
                   </div>
                   <ul className="space-y-1 text-sm text-blue-800 ml-7">
                     <li>• Tap any time slot to create a session. Slots can contain multiple projects.</li>
+                    <li>• You can customize slot names (e.g., 'Morning Shoots', 'Afternoon Portraits')</li>
                     <li>• Click on a session to view details and assign photographers</li>
                     <li>• Sessions starting soon will pulse to grab your attention</li>
                     <li>• Use the photographer filter to view specific schedules</li>
@@ -1164,14 +1366,39 @@ export default function AdminCalendar() {
                     className={`flex-1 relative border-r last:border-r-0 ${isToday ? 'bg-blue-50/30' : isWeekend ? 'bg-gray-50/50' : ''}`}
                     data-testid={`day-column-${dayIndex}`}
                   >
-                    {calendarHours.map(hour => (
-                      <div 
-                        key={hour} 
-                        className="h-[60px] border-b cursor-pointer hover:bg-blue-50/50 transition-colors"
-                        onClick={() => handleTimeSlotClick(date, hour)}
-                        data-testid={`slot-cell-${key}-${hour}`}
-                      />
-                    ))}
+                    {calendarHours.map(hour => {
+                      const slotKey = `${key}-${hour}`;
+                      const currentSlot = calendarSlots.find(
+                        s => s.date === key && s.hour === hour
+                      );
+                      const slotSessions = weekSessions.filter(session =>
+                        doesSessionOverlapSlot(session, date, hour)
+                      );
+
+                      return (
+                        <div 
+                          key={hour} 
+                          className="h-[60px] border-b cursor-pointer hover:bg-blue-50/50 transition-colors relative"
+                          onClick={() => handleTimeSlotClick(date, hour)}
+                          data-testid={`slot-cell-${key}-${hour}`}
+                        >
+                          {currentSlot?.label && (
+                            <div className="absolute top-1 left-1 right-1 z-10 pointer-events-none">
+                              <Badge variant="outline" className="text-[10px] px-1 py-0 bg-white/90 truncate block max-w-full">
+                                {currentSlot.label}
+                              </Badge>
+                            </div>
+                          )}
+                          {slotSessions.length > 1 && (
+                            <div className="absolute bottom-1 right-1 z-10 pointer-events-none">
+                              <Badge className="text-[9px] px-1.5 py-0 bg-purple-600 text-white">
+                                {slotSessions.length} sessions
+                              </Badge>
+                            </div>
+                          )}
+                        </div>
+                      );
+                    })}
                     
                     {isToday && (
                       <div
@@ -1312,6 +1539,7 @@ export default function AdminCalendar() {
 
         <CreateSessionDialog />
         <SessionDetailsSheet />
+        <SlotPanelSheet />
         
         <AlertDialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
           <AlertDialogContent data-testid="dialog-delete-confirmation">
