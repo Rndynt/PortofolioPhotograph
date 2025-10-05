@@ -6,6 +6,7 @@ import { z } from "zod";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import type { Order, Payment, Category, PriceTier, Session, Photographer, SessionAssignment, Project, InsertSession } from "@shared/schema";
 import { insertSessionSchema } from "@shared/schema";
+import { formatJkt } from "@shared/datetime";
 import AdminLayout from "./layout";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -640,7 +641,7 @@ export default function AdminOrders() {
                             {payment.paidAt && (
                               <p className="text-xs text-gray-500 mt-1">
                                 <Calendar className="h-3 w-3 inline mr-1" />
-                                {new Date(payment.paidAt).toLocaleString('id-ID')}
+                                {formatJkt(new Date(payment.paidAt), 'dd MMM yyyy, HH:mm')}
                               </p>
                             )}
                           </div>
@@ -817,10 +818,7 @@ function SessionCard({
           <div className="flex items-center gap-2">
             <Calendar className="h-4 w-4 text-gray-500" />
             <span className="text-sm font-medium">
-              {new Date(session.startAt).toLocaleString('id-ID', { 
-                dateStyle: 'medium', 
-                timeStyle: 'short' 
-              })}
+              {formatJkt(new Date(session.startAt), 'dd MMM yyyy, HH:mm')} - {formatJkt(new Date(session.endAt), 'HH:mm')}
             </span>
             <Badge variant={session.status === "DONE" ? "default" : "secondary"} className="text-xs">
               {session.status}
