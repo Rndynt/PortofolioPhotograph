@@ -1,6 +1,7 @@
 import express, { type Request, Response, NextFunction } from "express";
 import { registerRoutes } from "./routes";
 import { setupVite, serveStatic, log } from "./vite";
+import { storage } from "./storage";
 
 const app = express();
 app.use(express.json());
@@ -39,6 +40,16 @@ app.use((req, res, next) => {
 });
 
 (async () => {
+  const existingSettings = await storage.getAppSettings();
+  if (!existingSettings) {
+    await storage.updateAppSettings({
+      timezone: 'Asia/Jakarta',
+      calendarStartHour: 6,
+      calendarEndHour: 20,
+    });
+    log('Seeded initial app settings');
+  }
+
   const server = await registerRoutes(app);
 
   app.use((err: any, _req: Request, res: Response, _next: NextFunction) => {

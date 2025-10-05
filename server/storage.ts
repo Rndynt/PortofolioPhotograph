@@ -21,6 +21,10 @@ import {
   type InsertSession,
   type SessionAssignment,
   type InsertSessionAssignment,
+  type CalendarSlot,
+  type InsertCalendarSlot,
+  type AppSettings,
+  type InsertAppSettings,
   type PaymentStatus,
   categories,
   priceTiers,
@@ -33,9 +37,11 @@ import {
   photographers,
   sessions,
   sessionAssignments,
+  calendarSlots,
+  appSettings,
 } from "@shared/schema";
 import { db } from "./db";
-import { eq, and, like, or, gte, lte, inArray } from "drizzle-orm";
+import { eq, and, like, or, gte, lte, inArray, asc } from "drizzle-orm";
 
 export interface IStorage {
   // Categories
@@ -114,6 +120,14 @@ export interface IStorage {
   assignPhotographerToSession(sessionId: string, photographerId: string): Promise<SessionAssignment>;
   getSessionAssignments(sessionId: string): Promise<SessionAssignment[]>;
   removeSessionAssignment(assignmentId: string): Promise<void>;
+
+  // Calendar Slots
+  getCalendarSlots(from: string, to: string): Promise<CalendarSlot[]>;
+  upsertCalendarSlots(slots: Array<{localDate: string, hour: number, label?: string}>): Promise<void>;
+
+  // App Settings
+  getAppSettings(): Promise<AppSettings | undefined>;
+  updateAppSettings(settings: Partial<InsertAppSettings>): Promise<AppSettings>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -561,6 +575,63 @@ export class DatabaseStorage implements IStorage {
 
   async removeSessionAssignment(assignmentId: string): Promise<void> {
     await db.delete(sessionAssignments).where(eq(sessionAssignments.id, assignmentId));
+  }
+
+  // Calendar Slots
+  async getCalendarSlots(from: string, to: string): Promise<CalendarSlot[]> {
+    return await db
+      .select()
+      .from(calendarSlots)
+      .where(and(gte(calendarSlots.localDate, from), lte(calendarSlots.localDate, to)))
+      .orderBy(asc(calendarSlots.localDate), asc(calendarSlots.hour));
+  }
+
+  async upsertCalendarSlots(slots: Array<{localDate: string, hour: number, label?: string}>): Promise<void> {
+    for (const slot of slots) {
+      await db
+        .insert(calendarSlots)
+        .values({
+          localDate: slot.localDate,
+          hour: slot.hour,
+          label: slot.label,
+        })
+        .onConflictDoUpdate({
+          target: [calendarSlots.localDate, calendarSlots.hour],
+          set: {
+            label: slot.label,
+            updatedAt: new Date(),
+          },
+        });
+    }
+  }
+
+  // App Settings
+  async getAppSettings(): Promise<AppSettings | undefined> {
+    const [settings] = await db.select().from(appSettings).limit(1);
+    return settings || undefined;
+  }
+
+  async updateAppSettings(settings: Partial<InsertAppSettings>): Promise<AppSettings> {
+    const existing = await this.getAppSettings();
+
+    if (existing) {
+      const [updated] = await db
+        .update(appSettings)
+        .set({ ...settings, updatedAt: new Date() })
+        .where(eq(appSettings.id, existing.id))
+        .returning();
+      return updated;
+    } else {
+      const [created] = await db
+        .insert(appSettings)
+        .values({
+          timezone: settings.timezone || 'Asia/Jakarta',
+          calendarStartHour: settings.calendarStartHour || 6,
+          calendarEndHour: settings.calendarEndHour || 20,
+        })
+        .returning();
+      return created;
+    }
   }
 }
 
