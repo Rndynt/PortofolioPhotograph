@@ -69,6 +69,28 @@ const updateSessionApiSchema = z.object({
   status: z.enum(["PLANNED", "CONFIRMED", "DONE", "CANCELLED"]).optional(),
 }).partial();
 
+const calendarSlotSchema = z.object({
+  localDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Invalid date format, must be YYYY-MM-DD"),
+  hour: z.number().int().min(0).max(23),
+  label: z.string().optional(),
+});
+
+const upsertCalendarSlotsSchema = z.array(calendarSlotSchema);
+
+const updateAppSettingsSchema = z.object({
+  calendarStartHour: z.number().int().min(0).max(23).optional(),
+  calendarEndHour: z.number().int().min(0).max(23).optional(),
+  timezone: z.string().default('Asia/Jakarta'),
+}).refine(
+  (data) => {
+    if (data.calendarStartHour !== undefined && data.calendarEndHour !== undefined) {
+      return data.calendarStartHour < data.calendarEndHour;
+    }
+    return true;
+  },
+  { message: "calendarStartHour must be less than calendarEndHour" }
+);
+
 function hashCode(str: string): number {
   let hash = 0;
   for (let i = 0; i < str.length; i++) {
@@ -672,6 +694,71 @@ export async function registerRoutes(app: Express): Promise<Server> {
       res.status(204).send();
     } catch (error) {
       res.status(500).json({ message: "Failed to delete photographer" });
+    }
+  });
+
+  // Calendar Slots routes
+  app.get("/api/calendar/slots", async (req, res) => {
+    try {
+      const { from, to } = req.query;
+      
+      if (!from || !to || typeof from !== "string" || typeof to !== "string") {
+        return res.status(400).json({ message: "Query params 'from' and 'to' are required" });
+      }
+      
+      // Validate date format (YYYY-MM-DD)
+      const dateRegex = /^\d{4}-\d{2}-\d{2}$/;
+      if (!dateRegex.test(from) || !dateRegex.test(to)) {
+        return res.status(400).json({ message: "Invalid date format, must be YYYY-MM-DD" });
+      }
+      
+      // Validate dates are valid
+      const fromDate = new Date(from);
+      const toDate = new Date(to);
+      if (isNaN(fromDate.getTime()) || isNaN(toDate.getTime())) {
+        return res.status(400).json({ message: "Invalid date values" });
+      }
+      
+      const slots = await storage.getCalendarSlots(from, to);
+      res.json(slots);
+    } catch (error) {
+      res.status(500).json({ message: "Failed to fetch calendar slots" });
+    }
+  });
+
+  app.patch("/api/calendar/slots", async (req, res) => {
+    try {
+      const validatedData = upsertCalendarSlotsSchema.parse(req.body);
+      await storage.upsertCalendarSlots(validatedData);
+      res.json({ message: "Calendar slots updated successfully" });
+    } catch (error) {
+      if (error instanceof z.ZodError) {
+        return res.status(400).json({ message: "Invalid calendar slots data", errors: error.errors });
+      }
+      res.status(500).json({ message: "Failed to update calendar slots" });
+    }
+  });
+
+  // App Settings routes
+  app.get("/api/settings/app", async (req, res) => {
+    try {
+      const settings = await storage.getAppSettings();
+      res.json(settings);
+    } catch (error) {
+      res.status(500).json({ message: "Failed to fetch app settings" });
+    }
+  });
+
+  app.patch("/api/settings/app", async (req, res) => {
+    try {
+      const validatedData = updateAppSettingsSchema.parse(req.body);
+      const settings = await storage.updateAppSettings(validatedData);
+      res.json(settings);
+    } catch (error) {
+      if (error instanceof z.ZodError) {
+        return res.status(400).json({ message: "Invalid app settings data", errors: error.errors });
+      }
+      res.status(500).json({ message: "Failed to update app settings" });
     }
   });
 
